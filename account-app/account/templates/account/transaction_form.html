@@ -1,0 +1,161 @@
+{% extends "account/base.html" %}
+{% load humanize %}
+
+{% block title %}새 거래 입력{% endblock %}
+
+{% block extra_style %}
+<style>
+    .preset-section { margin-bottom: 1.5em; }
+    .preset-btn {
+        background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px;
+        padding: 5px 10px; margin: 2px; cursor: pointer; font-size: 0.9em;
+    }
+    .preset-btn:hover { background-color: #e0e0e0; }
+    .type-자산 { color: #d32be2; } .type-부채 { color: #007BA7; } .type-비용 { color: #A52A2A; }
+    .type-수익 { color: #89c91b; } .type-순자산 { color: #ffe600; }
+    form p, .form-check { line-height: 1.6; margin-bottom: 1em; }
+    .form-check-input { margin-right: 8px; }
+
+    .recent-transactions table { width:100%; border-collapse: collapse; margin-top: 1em; font-size: 0.9em; }
+    .recent-transactions th, .recent-transactions td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #ddd; }
+    .recent-transactions th { background-color: #f8f8f8; }
+    .recent-transactions td { vertical-align: middle; }
+</style>
+{% endblock %}
+
+{% block content %}
+    <h1>새 거래 입력</h1>
+    
+    {% if messages %}
+        <div class="messages" style="background-color: #d4edda; color: #155724; padding: 10px; margin-top: 10px; border-radius: 4px;">
+            {% for message in messages %}
+                {{ message }}
+            {% endfor %}
+        </div>
+    {% endif %}
+    
+    <hr>
+
+    <div class="preset-section">
+        <strong>고정 항목:</strong>
+        <div>
+            {% for preset in fixed_presets %}
+            <button type="button" class="preset-btn"
+                data-item="{{ preset.item }}" data-amount="{{ preset.amount|default:'' }}"
+                data-day="{{ preset.day_of_month }}" data-debit-id="{{ preset.debit_account_id }}"
+                data-credit-id="{{ preset.credit_account_id }}">
+                [{{ preset.day_of_month }}일] {{ preset.name }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="preset-section">
+        <strong>자주 입력:</strong>
+        <div>
+            {% for preset in frequent_presets %}
+            <button type="button" class="preset-btn"
+                data-item="{{ preset.item }}" data-amount="{{ preset.amount|default:'' }}"
+                data-debit-id="{{ preset.debit_account_id }}" data-credit-id="{{ preset.credit_account_id }}">{{ preset.name }}</button>
+            {% endfor %}
+        </div>
+    </div>
+    <hr>
+
+    <form method="post" id="transaction-form">
+        {% csrf_token %}
+        <p>날짜: <input type="date" name="date" id="date-input" value="{{ today|date:'Y-m-d' }}" required></p>
+        <p>아이템: <input type="text" name="item" id="item-input" required style="width: 300px;"></p>
+        <p>메모: <input type="text" name="memo" id="memo-input" style="width: 300px;"></p>
+        <p>금액: <input type="number" name="amount" id="amount-input" required></p>
+        <hr>
+        <p>
+            <select name="debit_account" id="debit-account-select" required>
+                <option value="">--- [차변] 항목 선택 ---</option>
+                {% for type, accounts in debit_accounts.items %}
+                    <optgroup label="{{ type }}">
+                        {% for acc in accounts %}
+                            <option value="{{ acc.id }}" class="type-{{ acc.type }}">
+                                {% if acc.type == '자산' or acc.type == '비용' %}+{% else %}-{% endif %}
+                                {{ acc.name }}
+                            </option>
+                        {% endfor %}
+                    </optgroup>
+                {% endfor %}
+            </select>
+        </p>
+        <p>
+            <select name="credit_account" id="credit-account-select" required>
+                <option value="">--- [대변] 항목 선택 ---</option>
+                {% for type, accounts in credit_accounts.items %}
+                    <optgroup label="{{ type }}">
+                        {% for acc in accounts %}
+                            <option value="{{ acc.id }}" class="type-{{ acc.type }}">
+                                {% if acc.type == '부채' or acc.type == '수익' or acc.type == '순자산' %}+{% else %}-{% endif %}
+                                {{ acc.name }}
+                            </option>
+                        {% endfor %}
+                    </optgroup>
+                {% endfor %}
+            </select>
+        </p>
+        
+        <div class="form-check">
+            <input type="checkbox" name="is_repayment" class="form-check-input" id="id_is_repayment">
+            <label class="form-check-label" for="id_is_repayment">
+                이 거래를 부채상환으로 처리합니다 (가용 현금 계산에서 제외)
+            </label>
+        </div>
+
+        <button type="submit" style="padding: 10px 20px; margin-top: 10px;">저장하기</button>
+    </form>
+
+    <div class="recent-transactions" style="margin-top: 3em;">
+        <h2>최근 입력 내역</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>날짜</th><th>아이템</th><th style="text-align: right;">금액</th><th>차변</th><th>대변</th><th>관리</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tx in recent_transactions %}
+                <tr>
+                    <td>{{ tx.date|date:"y-m-d" }}</td>
+                    <td>{{ tx.item }}</td>
+                    <td style="text-align: right;">{{ tx.amount|intcomma }}</td>
+                    <td>{{ tx.debit_account.name }}</td>
+                    <td>{{ tx.credit_account.name }}</td>
+                    <td>
+                        <a href="{% url 'account:transaction_update' tx.pk %}?next={{ request.path }}">수정</a>
+                        <form action="{% url 'account:transaction_delete' tx.pk %}?next={{ request.path }}" method="post" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" onclick="return confirm('정말 이 거래를 삭제하시겠습니까?');" style="padding: 2px 5px; font-size: 0.8em;">삭제</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" style="text-align: center;">최근 내역이 없습니다.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+    document.querySelectorAll('.preset-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const data = this.dataset;
+            document.getElementById('item-input').value = data.item || '';
+            document.getElementById('amount-input').value = data.amount || '';
+            document.getElementById('debit-account-select').value = data.debitId || '';
+            document.getElementById('credit-account-select').value = data.creditId || '';
+            if (data.day) {
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(data.day).padStart(2, '0');
+                document.getElementById('date-input').value = `${year}-${month}-${day}`;
+            }
+        });
+    });
+    </script>
+{% endblock %}

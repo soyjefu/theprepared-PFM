@@ -1,0 +1,222 @@
+{% extends "account/base.html" %}
+{% load humanize %}
+
+{% block title %}자산 현황{% endblock %}
+
+{% block extra_style %}
+<style>
+    /* ▼▼▼ 과거 버전의 모든 스타일을 복구했습니다 ▼▼▼ */
+    .status-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; text-align: center; background-color: #f8f9fa; padding: 20px; border-radius: 8px; }
+    .status-item h2 { margin: 0; font-size: 1.2em; color: #6c757d; }
+    .status-item p { margin: 5px 0 0; font-size: 2.2em; font-weight: 500; }
+    .net-worth { color: #007bff; }
+    .content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 2em; }
+    .account-list h3 { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #dee2e6; padding-bottom: 0.5em; }
+    .column-total { font-size: 0.8em; font-weight: normal; }
+    .bar-item { margin-bottom: 1.5em; }
+    .bar-info { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; font-size: 1em; }
+    .bar-info .balance-current { font-size: 1.2em; font-weight: 500; color: #000; }
+    .bar-info .balance-total { color: #6c757d; }
+    .bar-container { background-color: #e9ecef; border-radius: 5px; height: 12px; width: 100%; overflow: hidden; }
+    .bar { height: 100%; border-radius: 5px; }
+    .bar.asset { background-color: #8A2BE2; }
+    .bar.saving { background-color: #32CD32; }
+    .bar.liability { background-color: #007BA7; }
+    .negative .bar { background-color: #dc3545; }
+    .summary-section { margin-top: 2em; padding: 20px; border: 1px solid #dee2e6; border-radius: 8px; }
+    .summary-section p { margin: 0.5em 0; }
+    
+    /* 차트 스타일은 그대로 유지합니다 */
+    .chart-card {
+        margin-top: 1em;
+        margin-bottom: 2em;
+        padding: 20px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+    }
+    .chart-container {
+        position: relative;
+        height: 400px;
+        width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <h1>자산 현황</h1>
+
+    <div class="chart-card">
+        <h2>월별 순자산 추이</h2>
+        <div class="chart-container">
+            <canvas id="netWorthChart"></canvas>
+        </div>
+    </div>
+
+    <div class="status-container">
+        <div class="status-item">
+            <h2>현재 순자산</h2>
+            <p class="net-worth">{{ current_net_worth|intcomma }}</p>
+        </div>
+        <div class="status-item">
+            <h2>최종 순자산 (미래 포함)</h2>
+            <p>{{ net_worth|intcomma }}</p>
+        </div>
+    </div>
+
+    <div class="content-grid">
+        <div class="account-list">
+            <h3>
+                <span>자산</span>
+                <span class="column-total">
+                    (<span class="balance-current">{{ current_total_assets|intcomma }}</span>
+                    / <span class="balance-total">{{ total_assets|intcomma }}</span>)
+                </span>
+            </h3>
+            {% for account in assets %}
+            <div class="bar-item {% if account.current_balance < 0 %}negative{% endif %}">
+                <div class="bar-info">
+                    <span>{{ account.name }}</span>
+                    <span class="balance">
+                        (<span class="balance-current">{{ account.current_balance|intcomma }}</span>
+                        / <span class="balance-total">{{ account.total_balance|intcomma }}</span>)
+                    </span>
+                </div>
+                <div class="bar-container">
+                    <div class="bar asset" style="width: {% widthratio account.current_balance|slice:'1:'|add:'0' max_graph_value 100 %}%;"></div>
+                </div>
+            </div>
+            {% endfor %}
+            
+            <h3 style="margin-top: 2em;">
+                <span>저축</span>
+                <span class="column-total">
+                    (<span class="balance-current">{{ current_total_savings|intcomma }}</span>
+                    / <span class="balance-total">{{ total_savings|intcomma }}</span>)
+                </span>
+            </h3>
+            {% for account in savings %}
+            <div class="bar-item">
+                <div class="bar-info">
+                    <span>{{ account.name }}</span>
+                    <span class="balance">
+                        (<span class="balance-current">{{ account.current_balance|intcomma }}</span>
+                        / <span class="balance-total">{{ account.total_balance|intcomma }}</span>)
+                    </span>
+                </div>
+                <div class="bar-container">
+                    <div class="bar saving" style="width: {% widthratio account.current_balance max_graph_value 100 %}%;"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="account-list">
+            <h3>
+                <span>부채</span>
+                <span class="column-total">
+                    (<span class="balance-current">{{ current_total_liabilities|intcomma }}</span>
+                    / <span class="balance-total">{{ total_liabilities|intcomma }}</span>)
+                </span>
+            </h3>
+            {% for account in liabilities %}
+            <div class="bar-item">
+                <div class="bar-info">
+                    <span>{{ account.name }}</span>
+                    <span class="balance">
+                        (<span class="balance-current">{{ account.current_balance|intcomma }}</span>
+                        / <span class="balance-total">{{ account.total_balance|intcomma }}</span>)
+                    </span>
+                </div>
+                <div class="bar-container">
+                    <div class="bar liability" style="width: {% widthratio account.current_balance max_graph_value 100 %}%;"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="summary-section">
+        <h2>월별 손익 현황</h2>
+        <form method="get">
+            <select name="year" onchange="this.form.submit()">
+                {% for y in years %}
+                <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}년</option>
+                {% endfor %}
+            </select>
+            <select name="month" onchange="this.form.submit()">
+                {% for m in months %}
+                <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }}월</option>
+                {% endfor %}
+            </select>
+        </form>
+        <hr>
+        <p><strong>수입:</strong> {{ monthly_income|intcomma }}원</p>
+        <p><strong>비용:</strong> {{ monthly_expense|intcomma }}원</p>
+        <p><strong>저축:</strong> {{ monthly_savings|intcomma }}원</p>
+        <p><strong>부채상환:</strong> {{ monthly_repayments|intcomma }}원</p>
+        <hr>
+        <p><strong>순이익 (수입 - 비용):</strong> {{ monthly_net_profit|intcomma }}원</p>
+        <p><strong>가용 현금 (순이익 - 저축 - 부채상환):</strong> {{ available_cash|intcomma }}원</p>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const canvasElement = document.getElementById('netWorthChart');
+        if (canvasElement) {
+            const ctx = canvasElement.getContext('2d');
+            const chartDataJson = '{{ chart_data_json|safe }}';
+            try {
+                const chartData = JSON.parse(chartDataJson);
+                if (chartData.labels && chartData.labels.length > 0) {
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: chartData.labels,
+                            datasets: [{
+                                label: '월말 순자산',
+                                data: chartData.net_worth_data,
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                fill: true,
+                                tension: 0.1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    ticks: {
+                                        callback: function(value) {
+                                            return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(value);
+                                        }
+                                    }
+                                }
+                            },
+                            plugins: {
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.dataset.label || '';
+                                            if (label) { label += ': '; }
+                                            if (context.parsed.y !== null) {
+                                                label += new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(context.parsed.y);
+                                            }
+                                            return label;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    ctx.textAlign = 'center';
+                    ctx.font = '16px Arial';
+                    ctx.fillText('차트를 표시할 거래 내역이 없습니다.', canvasElement.width / 2, 50);
+                }
+            } catch (e) {
+                console.error('차트 데이터 파싱 오류:', e);
+            }
+        }
+    });
+    </script>
+{% endblock %}

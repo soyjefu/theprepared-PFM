@@ -1,0 +1,151 @@
+{% extends "account/base.html" %}
+{% block title %}환경설정{% endblock %}
+
+{% block extra_style %}
+<style>
+    .settings-section { margin-bottom: 2.5em; padding: 20px; border: 1px solid #dee2e6; border-radius: 8px; }
+    .settings-section h2 { margin-top: 0; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
+    .item-list { list-style: none; padding: 0; }
+    .item-list li { padding: 8px 0; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+    .item-actions a { margin-left: 10px; text-decoration: none; }
+    .form-container form p { margin: 10px 0; }
+    .form-container label { display: inline-block; min-width: 120px; }
+</style>
+{% endblock %}
+
+{% block content %}
+    <h1>환경설정</h1>
+    {% if messages %}
+        {% for message in messages %}
+            <div class="message {{ message.tags }}" style="padding: 10px; background-color: #d4edda; border-radius: 5px; margin-bottom: 1em;">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- 1. 거래 프리셋 관리 (id 추가) -->
+    <div class="settings-section" id="preset-section">
+        <h2>1. 거래 프리셋 관리</h2>
+        <div class="form-container">
+            <h3>새 프리셋 추가</h3>
+            <form method="post">
+                {% csrf_token %}
+                {{ preset_form.as_p }}
+                <button type="submit" name="add_preset">프리셋 추가</button>
+            </form>
+        </div>
+        <hr>
+        <h3>현재 프리셋 목록</h3>
+        <ul class="item-list">
+            {% for preset in user_presets %}
+                <li>
+                    <span>{{ preset.name }} ({{ preset.get_preset_type_display }}) - {{ preset.item }}</span>
+                    <div class="item-actions">
+                        <a href="{% url 'account:preset_update' preset.pk %}">수정</a>
+                        <a href="{% url 'account:preset_delete' preset.pk %}">삭제</a>
+                    </div>
+                </li>
+            {% empty %}
+                <li>등록된 프리셋이 없습니다.</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <!-- 2. 회계 계정 항목 관리 (id 추가) -->
+    <div class="settings-section" id="account-section">
+        <h2>2. 회계 계정 항목 관리</h2>
+        <div id="add-account-form">
+            <div class="form-container">
+                <h3>새 계정 항목 추가</h3>
+                <form method="post">
+                    {% csrf_token %}
+                    {{ account_form.as_p }}
+                    <button type="submit" name="add_account">계정 추가</button>
+                </form>
+            </div>
+        </div>
+        <hr>
+        <h3>현재 계정 목록</h3>
+        <ul class="item-list">
+            {% for account in user_accounts %}
+                <li>
+                    <span>{{ account.name }} ({{ account.type }})</span>
+                    <div class="item-actions">
+                        <a href="{% url 'account:account_update' account.pk %}">수정</a>
+                        <a href="{% url 'account:account_delete' account.pk %}">삭제</a>
+                    </div>
+                </li>
+            {% empty %}
+                <li>등록된 계정이 없습니다.</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <!-- 3. 사용자 계정 변경 (id 추가) -->
+    <div class="settings-section" id="profile-section">
+        <h2>3. 사용자 계정 변경</h2>
+        <form method="post">
+            {% csrf_token %}
+            {{ user_profile_form.as_p }}
+            <button type="submit" name="update_profile">정보 수정</button>
+        </form>
+    </div>
+
+    <!-- 4. 비밀번호 변경 (id 추가) -->
+    <div class="settings-section" id="password-section">
+        <h2>4. 비밀번호 변경</h2>
+        <form method="post">
+            {% csrf_token %}
+            {{ password_form.as_p }}
+            <button type="submit" name="change_password">비밀번호 변경</button>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const formWrapper = document.getElementById('add-account-form');
+            const typeSelect = formWrapper.querySelector('#id_type');
+            const categorySelect = formWrapper.querySelector('#id_category');
+
+            const categoryOptions = {
+                '자산': [
+                    { value: 'GENERAL', text: '일반' },
+                    { value: 'VARIABLE', text: '유동' },
+                    { value: 'SAVING', text: '저축' }
+                ],
+                '부채': [
+                    { value: 'GENERAL', text: '일반' },
+                    { value: 'VARIABLE', text: '유동' }
+                ],
+                '수익': [
+                    { value: 'FIXED', text: '고정' },
+                    { value: 'VARIABLE', text: '유동' }
+                ],
+                '비용': [
+                    { value: 'FIXED', text: '고정' },
+                    { value: 'VARIABLE', text: '유동' }
+                ],
+                '순자산': [
+                    { value: 'GENERAL', text: '일반' }
+                ]
+            };
+
+            function updateCategoryOptions() {
+                const selectedType = typeSelect.value;
+                const options = categoryOptions[selectedType] || [];
+                
+                categorySelect.innerHTML = ''; // 기존 옵션 삭제
+
+                options.forEach(opt => {
+                    const optionElement = document.createElement('option');
+                    optionElement.value = opt.value;
+                    optionElement.textContent = opt.text;
+                    categorySelect.appendChild(optionElement);
+                });
+            }
+
+            typeSelect.addEventListener('change', updateCategoryOptions);
+            updateCategoryOptions(); // 페이지 로드 시 초기화
+        });
+    </script>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "account/base.html" %}
+
+{% block title %}거래 삭제 확인{% endblock %}
+
+{% block content %}
+    <h1>정말 삭제하시겠습니까?</h1>
+    <p>"{{ transaction.date }} - {{ transaction.item }} ({{ transaction.amount }})"</p>
+    
+    <form method="post" action="?next={{ next }}">
+        {% csrf_token %}
+        <button type="submit">네, 삭제합니다.</button>
+        <a href="{{ next }}">아니요, 취소합니다.</a>
+    </form>
+{% endblock %}

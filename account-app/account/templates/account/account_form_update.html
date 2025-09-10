@@ -1,0 +1,70 @@
+{% extends "account/base.html" %}
+{% block title %}계정 항목 수정{% endblock %}
+
+{% block content %}
+    <h2>계정 항목 수정</h2>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">저장하기</button>
+        <a href="{% url 'account:settings' %}#account-section">취소</a>
+    </form>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const typeSelect = document.getElementById('id_type');
+            const categorySelect = document.getElementById('id_category');
+
+            const categoryOptions = {
+                '자산': [
+                    { value: 'GENERAL', text: '일반' },
+                    { value: 'VARIABLE', text: '유동' },
+                    { value: 'SAVING', text: '저축' }
+                ],
+                '부채': [
+                    { value: 'GENERAL', text: '일반' },
+                    { value: 'VARIABLE', text: '유동' }
+                ],
+                '수익': [
+                    { value: 'FIXED', text: '고정' },
+                    { value: 'VARIABLE', text: '유동' }
+                ],
+                '비용': [
+                    { value: 'FIXED', text: '고정' },
+                    { value: 'VARIABLE', text: '유동' }
+                ],
+                '순자산': [
+                    { value: 'GENERAL', text: '일반' }
+                ]
+            };
+
+            function updateCategoryOptions() {
+                const selectedType = typeSelect.value;
+                const options = categoryOptions[selectedType] || [];
+                
+                // 현재 category의 선택된 값을 기억 (수정 페이지용)
+                const currentCategoryValue = categorySelect.value;
+
+                categorySelect.innerHTML = ''; // 기존 옵션 삭제
+
+                options.forEach(opt => {
+                    const optionElement = document.createElement('option');
+                    optionElement.value = opt.value;
+                    optionElement.textContent = opt.text;
+                    categorySelect.appendChild(optionElement);
+                });
+
+                // 만약 이전에 선택했던 값이 새 옵션 목록에 있다면, 다시 선택
+                if (options.some(opt => opt.value === currentCategoryValue)) {
+                    categorySelect.value = currentCategoryValue;
+                }
+            }
+
+            // '계정 타입' 변경 시 이벤트 리스너 추가
+            typeSelect.addEventListener('change', updateCategoryOptions);
+
+            // 페이지 로드 시 한 번 실행하여 초기 상태 설정
+            updateCategoryOptions();
+        });
+    </script>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "account/base.html" %}
+{% block title %}삭제 확인{% endblock %}
+
+{% block content %}
+    <h2>정말 삭제하시겠습니까?</h2>
+    <p>"{{ object.name }}" 항목을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit" style="background-color: #dc3545; color: white;">예, 삭제합니다.</button>
+        <a href="{% url 'account:settings' %}">취소</a>
+    </form>
+{% endblock %}

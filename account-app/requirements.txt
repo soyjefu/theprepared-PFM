@@ -1,0 +1,4 @@
+Django==5.0.6 # Django 5.0.6은 Python 3.10, 3.11, 3.12를 지원합니다.
+gunicorn==22.0.0 # Gunicorn 22.0.0은 Python 3.8 ~ 3.12를 지원합니다.
+psycopg2-binary==2.9.9 # psycopg2-binary 2.9.9는 Python 3.7 ~ 3.12를 지원합니다.
+python-dateutil==2.9.0

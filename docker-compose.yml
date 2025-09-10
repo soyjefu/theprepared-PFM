@@ -1,0 +1,26 @@
+# theprepared/docker-compose.yml
+
+networks:
+  theprepared:
+    external: true
+
+services:
+  account_app:
+    build:
+      context: ./account-app
+      dockerfile: Dockerfile
+    container_name: account_app
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres_db
+      POSTGRES_DB: ${POSTGRES_DB_A}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY_A}
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE_A}
+    volumes:
+      - ./account-app:/app
+    networks:
+      - theprepared
+    stdin_open: true
+    tty: true

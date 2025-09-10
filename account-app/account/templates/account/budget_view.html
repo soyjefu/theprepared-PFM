@@ -1,0 +1,189 @@
+{% extends "account/base.html" %}
+{% load humanize %}
+{% block title %}예산 현황{% endblock %}
+
+{% block extra_style %}
+<style>
+    .budget-container {
+        padding: 20px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        background-color: #fff;
+    }
+    .budget-header {
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+    .filter-form {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        align-items: center;
+    }
+    .filter-form select, .filter-form button {
+        padding: 5px 10px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+    }
+    .filter-form button {
+        background-color: #343a40;
+        color: white;
+        cursor: pointer;
+    }
+    .budget-summary {
+        display: flex;
+        justify-content: space-around;
+        text-align: center;
+        margin-bottom: 30px;
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+    }
+    .summary-item h3 {
+        margin: 0 0 5px 0;
+        color: #6c757d;
+        font-size: 1em;
+    }
+    .summary-item .amount {
+        font-size: 1.5em;
+        font-weight: bold;
+    }
+    .budget-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+    }
+    .budget-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .budget-table th, .budget-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .budget-table th {
+        background-color: #f8f9fa;
+    }
+    .budget-table td:nth-child(2) {
+        text-align: right;
+        font-weight: 500;
+    }
+    .category-label {
+        font-size: 0.85em;
+        color: #6c757d;
+        background-color: #e9ecef;
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+    @media (max-width: 768px) {
+        .budget-columns {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="budget-container">
+    <div class="budget-header">
+        <h2>{{ year }}년 {{ month }}월 예산 현황</h2>
+    </div>
+
+    <!-- 검색 필터 폼 -->
+    <form method="get" action="{% url 'account:budget_view' %}" class="filter-form">
+        <select name="year">
+            {% for y in years %}
+                <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}년</option>
+            {% endfor %}
+        </select>
+        <select name="month">
+            {% for m in months %}
+                <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ m }}월</option>
+            {% endfor %}
+        </select>
+        <button type="submit">조회</button>
+    </form>
+
+    <!-- 월별 요약 -->
+    <div class="budget-summary">
+        <div class="summary-item">
+            <h3>총 수익</h3>
+            <div class="amount" style="color: #4dabf7;">{{ total_income|intcomma }}원</div>
+        </div>
+        <div class="summary-item">
+            <h3>총 비용</h3>
+            <div class="amount" style="color: #ff6b6b;">{{ total_expense|intcomma }}원</div>
+        </div>
+        <div class="summary-item">
+            <h3>합계</h3>
+            <div class="amount" style="color: {% if net_total < 0 %}#ff6b6b{% else %}#4dabf7{% endif %};">{{ net_total|intcomma }}원</div>
+        </div>
+    </div>
+
+    <!-- 수익/비용 상세 내역 -->
+    <div class="budget-columns">
+        <div class="budget-column">
+            <h3>수익 내역</h3>
+            <table class="budget-table">
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th style="text-align: right;">금액</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in fixed_income_details %}
+                    <tr>
+                        <td>{{ item.name }} <span class="category-label">고정</span></td>
+                        <td>{{ item.actual|intcomma }}원</td>
+                    </tr>
+                    {% endfor %}
+                    
+                    {% if other_income_total > 0 %}
+                    <tr>
+                        <td>기타 수익 <span class="category-label">유동/일반</span></td>
+                        <td>{{ other_income_total|intcomma }}원</td>
+                    </tr>
+                    {% endif %}
+
+                    {% if not fixed_income_details and other_income_total == 0 %}
+                    <tr><td colspan="2" style="text-align: center;">해당 월의 수익 내역이 없습니다.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        <div class="budget-column">
+            <h3>비용 내역</h3>
+            <table class="budget-table">
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th style="text-align: right;">금액</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in fixed_expense_details %}
+                    <tr>
+                        <td>{{ item.name }} <span class="category-label">고정</span></td>
+                        <td>{{ item.actual|intcomma }}원</td>
+                    </tr>
+                    {% endfor %}
+
+                    {% if other_expense_total > 0 %}
+                    <tr>
+                        <td>기타 비용 <span class="category-label">유동/일반</span></td>
+                        <td>{{ other_expense_total|intcomma }}원</td>
+                    </tr>
+                    {% endif %}
+
+                    {% if not fixed_expense_details and other_expense_total == 0 %}
+                    <tr><td colspan="2" style="text-align: center;">해당 월의 비용 내역이 없습니다.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

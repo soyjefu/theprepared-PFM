@@ -1,0 +1,15 @@
+{% extends "account/base.html" %}
+{% block title %}로그인{% endblock %}
+{% block content %}
+    <h2>로그인</h2>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <p>
+            <input type="checkbox" name="remember_me" id="remember_me">
+            <label for="remember_me">자동 로그인</label>
+        </p>
+        <button type="submit">로그인</button>
+    </form>
+    <p>계정이 없으신가요? <a href="{% url 'account:signup' %}">회원가입</a></p>
+{% endblock %}

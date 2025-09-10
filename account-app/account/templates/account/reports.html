@@ -1,0 +1,134 @@
+{% extends "account/base.html" %}
+{% load humanize %}
+
+{% block title %}통계 및 예산{% endblock %}
+
+{% block extra_style %}
+<style>
+    /* ... 이전과 동일한 스타일 ... */
+    .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 30px; }
+    .chart-container { position: relative; height: 400px; }
+    .budget-list .bar-container { background-color: #e9ecef; border-radius: 5px; height: 20px; width: 100%; margin-top: 5px; }
+    .budget-list .bar { height: 100%; border-radius: 5px; background-color: #007bff; text-align: right; color: white; font-size: 12px; line-height: 20px; padding-right: 5px; white-space: nowrap; transition: width 0.5s ease-in-out; }
+    .budget-list .bar.over { background-color: #dc3545; }
+    .summary-card { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-bottom: 15px; text-align: center; }
+    .summary-card h3 { margin-top: 0; color: #495057; font-size: 1.2rem; }
+    .summary-card .amount { font-size: 2em; font-weight: bold; color: #dc3545; }
+    .details-card { background-color: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-bottom: 30px; }
+    .details-card h4 { margin-top: 0; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; margin-bottom: 15px; }
+    .details-card ul { list-style: none; padding: 0; margin: 0; }
+    .details-card li { margin-bottom: 15px; }
+    .details-card .item-info { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.95rem; }
+    .details-card .bar-container { background-color: #e9ecef; border-radius: 5px; height: 10px; width: 100%; }
+    .details-card .bar { height: 100%; border-radius: 5px; background-color: #fd7e14; transition: width 0.5s ease-in-out; }
+
+    /* 추가된 스타일 */
+    .budget-form-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;}
+    .copy-budget-btn { background-color: #6c757d; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; }
+    .copy-budget-btn:hover { background-color: #5a6268; }
+    .total-budget-card .amount { color: #007bff; } /* 예산 총액은 파란색으로 */
+</style>
+{% endblock %}
+
+{% block content %}
+    <h1>{{ year }}년 {{ month }}월 리포트</h1>
+
+    <form method="get" id="periodForm">
+        <select name="year" onchange="this.form.submit()">
+            {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}년</option>{% endfor %}
+        </select>
+        <select name="month" onchange="this.form.submit()">
+            {% for m in months %}<option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ m }}월</option>{% endfor %}
+        </select>
+    </form>
+    <hr>
+
+    <div class="details-card">
+        <div class="budget-form-header">
+            <h4>예산 설정</h4>
+            <form method="post" onsubmit="return confirm('현재 월의 예산 설정이 모두 지워지고, 전달 예산으로 덮어씌워집니다. 계속하시겠습니까?');">
+                {% csrf_token %}
+                <button type="submit" name="copy_last_month_budget" class="copy-budget-btn">전달 예산 가져오기</button>
+            </form>
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit">예산 저장</button>
+        </form>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div class="summary-card">
+            <h3>월별 고정 비용 총액</h3>
+            <p class="amount">{{ fixed_expenses_total|intcomma }}원</p>
+        </div>
+        <div class="summary-card total-budget-card">
+            <h3>월별 예산 총액</h3>
+            <p class="amount">{{ total_budget|intcomma }}원</p>
+        </div>
+    </div>
+
+
+    <div class="details-card">
+        <h4>고정 비용 세부 내역</h4>
+        <ul>
+            {% for item in fixed_expense_details %}
+                <li>
+                    <div class="item-info">
+                        <span>{{ item.debit_account__name }}</span>
+                        <strong>{{ item.total_spent|intcomma }}원</strong>
+                    </div>
+                    <div class="bar-container">
+                        <div class="bar" style="width: {{ item.percentage }}%;"></div>
+                    </div>
+                </li>
+            {% empty %}
+                <li>이번 달 고정 비용 지출 내역이 없습니다.</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="report-grid">
+        <div>
+            <h2>전체 비용 지출 현황 (원형 차트)</h2>
+            <div class="chart-container">
+                <canvas id="spendingPieChart"></canvas>
+            </div>
+        </div>
+        <div class="budget-list">
+            <h2>예산 대비 사용 현황</h2>
+            {% for item in report_data %}
+                <div>
+                    <p>{{ item.name }}: {{ item.spent|intcomma }}원 / {{ item.budget|intcomma }}원</p>
+                    <div class="bar-container">
+                        <div class="bar {% if item.usage_percent > 100 %}over{% endif %}" style="width: {% if item.usage_percent > 100 %}100{% else %}{{ item.usage_percent }}{% endif %}%;">
+                            {{ item.usage_percent|floatformat:0 }}%
+                        </div>
+                    </div>
+                </div>
+            {% empty %}
+                <p>표시할 예산 항목이 없습니다.</p>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <script>
+    // 원형 차트 스크립트 (이전과 동일)
+    const pieChartData = {
+        labels: [{% for item in report_data %}{% if item.spent > 0 %}"{{ item.name }}",{% endif %}{% endfor %}],
+        datasets: [{
+            label: '지출액',
+            data: [{% for item in report_data %}{% if item.spent > 0 %}{{ item.spent }},{% endif %}{% endfor %}],
+            backgroundColor: [
+                '#A52A2A', '#007BA7', '#d32be2', '#89c91b', '#FFD700',
+                '#fd7e14', '#20c997', '#6f42c1', '#e83e8c', '#6c757d'
+            ],
+            hoverOffset: 4
+        }]
+    };
+    new Chart(document.getElementById('spendingPieChart'), {
+        type: 'pie', data: pieChartData, options: { responsive: true, maintainAspectRatio: false }
+    });
+    </script>
+{% endblock %}

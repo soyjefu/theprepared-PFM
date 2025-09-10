@@ -1,0 +1,168 @@
+{% extends "account/base.html" %}
+{% load humanize %}
+
+{% block title %}거래 내역{% endblock %}
+
+{% block extra_style %}
+<style>
+    .type-자산 { color: #d32be2; } .type-부채 { color: #007BA7; } .type-비용 { color: #A52A2A; }
+    .type-수익 { color: #89c91b; } .type-순자산 { color: #ffe600; }
+    .bg-type-자산 { background-color: #F9F2FB; } .bg-type-부채 { background-color: #E0F2F7; }
+    .bg-type-비용 { background-color: #F6E5E5; } .bg-type-수익 { background-color: #F2F9E2; }
+    .bg-type-순자산 { background-color: #FFF9CC; }
+    .plus { color: #2C7A50; font-weight: bold; } .minus { color: #C44234; font-weight: bold; }
+    table { width:100%; border-collapse: collapse; margin-top: 1em; }
+    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #ddd; }
+    th { background-color: #f8f8f8; } td { vertical-align: middle; }
+    .filter-form { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 1em; }
+    .filter-form input, .filter-form select, .filter-form button, .filter-form a { padding: 5px; margin-right: 10px; margin-top: 5px; vertical-align: middle;}
+    .filter-form a { text-decoration: none; background-color: #6c757d; color: white; padding: 6px 12px; border-radius: 5px; font-size: 0.9em; }
+    .total-sum { margin-top: 1em; text-align: right; font-weight: bold; font-size: 1.2em; }
+    #split-accounts { display: none; } /* 분리 검색 기본 숨김 */
+</style>
+{% endblock %}
+
+{% block content %}
+    <h1>거래 내역 조회</h1>
+
+    <div class="filter-form">
+        <form method="get">
+            <div>
+                <select name="year">
+                    <option value="">-- 연도 --</option>
+                    {% for y in years %}<option value="{{ y }}" {% if filters.year == y %}selected{% endif %}>{{ y }}년</option>{% endfor %}
+                </select>
+                <select name="month">
+                    <option value="">-- 월 --</option>
+                    {% for m in months %}<option value="{{ m }}" {% if filters.month == m %}selected{% endif %}>{{ m }}월</option>{% endfor %}
+                </select>
+                <span style="color: #6c757d; margin: 0 10px;">또는</span>
+                <input type="date" name="start_date" value="{{ filters.start_date }}">
+                ~
+                <input type="date" name="end_date" value="{{ filters.end_date }}">
+            </div>
+            <div style="margin-top: 10px;">
+                <!-- ▼▼▼▼▼ [수정됨] 통합 계정 검색을 기본으로 변경 ▼▼▼▼▼ -->
+                <select name="account" id="account-select">
+                    <option value="">-- 전체 계정 --</option>
+                    {% for acc in all_accounts %}
+                        <option value="{{ acc.id }}" {% if filters.account == acc.id|stringformat:"s" %}selected{% endif %}>{{ acc.name }}</option>
+                    {% endfor %}
+                </select>
+                <!-- ▲▲▲▲▲ 여기까지 수정 ▲▲▲▲▲ -->
+
+                <input type="text" name="item" placeholder="아이템" value="{{ filters.item }}">
+                <input type="text" name="memo" placeholder="메모" value="{{ filters.memo }}">
+                <button type="submit">검색</button>
+                <a href="{% url 'account:transaction_list' %}">초기화</a>
+                <a href="#" onclick="toggleAccountSearch(event)">분리검색</a>
+            </div>
+            <!-- ▼▼▼▼▼ [추가됨] 분리 검색 영역 ▼▼▼▼▼ -->
+            <div id="split-accounts" style="margin-top: 10px;">
+                <select name="debit_account">
+                    <option value="">-- 차변항목 --</option>
+                    {% for acc in all_accounts %}<option value="{{ acc.id }}" {% if filters.debit_account == acc.id|stringformat:"s" %}selected{% endif %}>{{ acc.name }}</option>{% endfor %}
+                </select>
+                <select name="credit_account">
+                    <option value="">-- 대변항목 --</option>
+                    {% for acc in all_accounts %}<option value="{{ acc.id }}" {% if filters.credit_account == acc.id|stringformat:"s" %}selected{% endif %}>{{ acc.name }}</option>{% endfor %}
+                </select>
+                <small style="color: #6c757d;">(분리 검색 시 '전체 계정'은 무시됩니다)</small>
+            </div>
+            <!-- ▲▲▲▲▲ 여기까지 추가 ▲▲▲▲▲ -->
+        </form>
+    </div>
+
+    <!-- ▼▼▼▼▼ [수정됨] 합계 표시 방식 변경 ▼▼▼▼▼ -->
+    <div class="total-sum">
+        {% if selected_account_name %}
+            <p style="font-size: 0.9em; color: #555;">[ {{ selected_account_name }} ]</p>
+            <p>기간 내 합계: {{ period_total|intcomma }} 원</p>
+            <p>누적 잔액 ({{ filters.end_date }} 기준): {{ cumulative_total|intcomma }} 원</p>
+        {% else %}
+            <p>검색 결과 합계: {{ period_total|intcomma }} 원</p>
+        {% endif %}
+    </div>
+    <!-- ▲▲▲▲▲ 여기까지 수정 ▲▲▲▲▲ -->
+
+    <table>
+        <thead>
+            <tr>
+                <th>날짜</th>
+                <th>아이템</th>
+                <th style="text-align: right;">금액</th>
+                <th>차변</th>
+                <th>대변</th>
+                <!-- ▼▼▼▼▼ [수정됨] 누적 합계 -> 잔액으로 변경 ▼▼▼▼▼ -->
+                {% if cumulative_total is not None %}
+                <th style="text-align: right;">잔액</th>
+                {% endif %}
+                <!-- ▲▲▲▲▲ 여기까지 수정 ▲▲▲▲▲ -->
+                <th>관리</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tx in transactions %}
+            <tr>
+                <td>{{ tx.date|date:"Y-m-d" }}</td>
+                <td>{{ tx.item }}{% if tx.memo %}<br><small style="color:#777;">{{ tx.memo }}</small>{% endif %}</td>
+                <td style="text-align: right;">{{ tx.amount|intcomma }}</td>
+                <td class="bg-type-{{ tx.debit_account.type }}">
+                    {% if tx.debit_account.type == '자산' or tx.debit_account.type == '비용' %}<span class="plus">+</span>{% else %}<span class="minus">-</span>{% endif %}
+                    <span class="type-{{ tx.debit_account.type }}">{{ tx.debit_account.name }}</span>
+                </td>
+                <td class="bg-type-{{ tx.credit_account.type }}">
+                    {% if tx.credit_account.type == '부채' or tx.credit_account.type == '수익' or tx.credit_account.type == '순자산' %}<span class="plus">+</span>{% else %}<span class="minus">-</span>{% endif %}
+                    <span class="type-{{ tx.credit_account.type }}">{{ tx.credit_account.name }}</span>
+                </td>
+                <!-- ▼▼▼▼▼ [수정됨] 잔액 표시 부분 추가 ▼▼▼▼▼ -->
+                {% if cumulative_total is not None %}
+                <td style="text-align: right;">
+                    {% if tx.balance is not None %}
+                        {{ tx.balance|intcomma }}
+                    {% endif %}
+                </td>
+                {% endif %}
+                <!-- ▲▲▲▲▲ 여기까지 수정 ▲▲▲▲▲ -->
+                <td>
+                    <a href="{% url 'account:transaction_update' tx.pk %}?next={{ request.get_full_path|urlencode }}">수정</a>
+                    <form action="{% url 'account:transaction_delete' tx.pk %}?next={{ request.get_full_path|urlencode }}" method="post" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" onclick="return confirm('정말 이 거래를 삭제하시겠습니까?');">삭제</button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" style="text-align: center; padding: 20px;">해당 조건의 거래 내역이 없습니다.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+<script>
+function toggleAccountSearch(event) {
+    event.preventDefault();
+    const splitDiv = document.getElementById('split-accounts');
+    const mainSelect = document.getElementById('account-select');
+    if (splitDiv.style.display === 'none') {
+        splitDiv.style.display = 'block';
+        mainSelect.disabled = true;
+    } else {
+        splitDiv.style.display = 'none';
+        mainSelect.disabled = false;
+    }
+}
+
+// 페이지 로드 시 분리 검색 필터가 사용 중이면 해당 영역을 보여줌
+document.addEventListener('DOMContentLoaded', function() {
+    const splitDiv = document.getElementById('split-accounts');
+    const mainSelect = document.getElementById('account-select');
+    const debitFilter = "{{ filters.debit_account }}";
+    const creditFilter = "{{ filters.credit_account }}";
+
+    if (debitFilter || creditFilter) {
+        splitDiv.style.display = 'block';
+        mainSelect.disabled = true;
+    }
+});
+</script>
+{% endblock %}
