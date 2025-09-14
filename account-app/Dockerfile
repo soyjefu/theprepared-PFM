@@ -1,5 +1,5 @@
 # Debian 12 (Bookworm) 기반의 Python 3.12 slim 이미지를 사용
-FROM python:3.13-slim
+FROM python:3.12-slim
 
 # 작업 디렉토리 설정
 WORKDIR /app
