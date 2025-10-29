@@ -98,6 +98,17 @@
         </div>
         <div class="budget-list">
             <h2>예산 대비 사용 현황</h2>
+            {% if total_budget > 0 %}
+                {% widthratio total_spent total_budget 100 as total_usage_percent %}
+                <div style="margin-bottom: 1rem;">
+                    <p><strong>총계</strong>: {{ total_spent|intcomma }}원 / {{ total_budget|intcomma }}원</p>
+                    <div class="bar-container">
+                        <div class="bar {% if total_usage_percent > 100 %}over{% endif %}" style="width: {% if total_usage_percent > 100 %}100{% else %}{{ total_usage_percent }}{% endif %}%;">
+                            {{ total_usage_percent|floatformat:0 }}%
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
             {% for item in report_data %}
                 <div>
                     <p>{{ item.name }}: {{ item.spent|intcomma }}원 / {{ item.budget|intcomma }}원</p>
