@@ -712,6 +712,7 @@ def reports_view(request):
 
     # --- 월별 예산 합계 계산 (추가된 부분) ---
     total_budget = sum(budget_dict.values())
+    total_spent = sum(spending_dict.values())
     
     context = {
         'year': year,
@@ -720,6 +721,7 @@ def reports_view(request):
         'fixed_expenses_total': fixed_expenses_total,
         'fixed_expense_details': fixed_expense_details,
         'total_budget': total_budget,  # <-- 템플릿에 전달할 예산 합계
+        'total_spent': total_spent,
         'years': range(today.year - 3, today.year + 2),
         'months': range(1, 13),
         'form': form,
