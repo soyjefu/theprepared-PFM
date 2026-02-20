@@ -146,7 +146,7 @@ def transaction_list(request):
         except Account.DoesNotExist:
             pass
 
-    all_accounts = Account.objects.filter(owner=request.user)
+    all_accounts = Account.objects.filter(owner=request.user, is_active=True)
     years = range(2020, today.year + 2)
     months = range(1, 13)
     
@@ -237,11 +237,11 @@ def transaction_create(request):
     debit_accounts = {}
     credit_accounts = {}
     
-    for acc in Account.objects.filter(owner=request.user).exclude(type='수익').order_by('name'):
+    for acc in Account.objects.filter(owner=request.user, is_active=True).exclude(type='수익').order_by('name'):
         if acc.type not in debit_accounts: debit_accounts[acc.type] = []
         debit_accounts[acc.type].append(acc)
 
-    for acc in Account.objects.filter(owner=request.user).exclude(type='비용').order_by('name'):
+    for acc in Account.objects.filter(owner=request.user, is_active=True).exclude(type='비용').order_by('name'):
         if acc.type not in credit_accounts: credit_accounts[acc.type] = []
         credit_accounts[acc.type].append(acc)
 
@@ -271,10 +271,10 @@ def transaction_update(request, pk):
     
     debit_accounts = {}
     credit_accounts = {}
-    for acc in Account.objects.filter(owner=request.user).exclude(type='수익').order_by('name'):
+    for acc in Account.objects.filter(owner=request.user, is_active=True).exclude(type='수익').order_by('name'):
         if acc.type not in debit_accounts: debit_accounts[acc.type] = []
         debit_accounts[acc.type].append(acc)
-    for acc in Account.objects.filter(owner=request.user).exclude(type='비용').order_by('name'):
+    for acc in Account.objects.filter(owner=request.user, is_active=True).exclude(type='비용').order_by('name'):
         if acc.type not in credit_accounts: credit_accounts[acc.type] = []
         credit_accounts[acc.type].append(acc)
     
@@ -308,15 +308,24 @@ def asset_status(request):
     )
     monthly_income = monthly_transactions.filter(credit_account__type='수익').aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
     monthly_expense = monthly_transactions.filter(debit_account__type='비용').aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
-    monthly_savings = monthly_transactions.filter(
+    
+    # --- 순 저축액 계산 (저축 입금액 - 저축 출금액) ---
+    saving_in = monthly_transactions.filter(
         debit_account__type='자산', debit_account__category='SAVING'
     ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
+    
+    saving_out = monthly_transactions.filter(
+        credit_account__type='자산', credit_account__category='SAVING'
+    ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
+    
+    monthly_savings = saving_in - saving_out
+    
     monthly_repayments = monthly_transactions.filter(is_repayment=True).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
     monthly_net_profit = monthly_income - monthly_expense
     available_cash = monthly_net_profit - monthly_savings - monthly_repayments
 
     # --- 자산/부채 잔액 계산 ---
-    accounts = Account.objects.filter(owner=request.user)
+    accounts = Account.objects.filter(owner=request.user, is_active=True)
     
     all_debits = {
         item['debit_account_id']: item['total'] for item in
@@ -472,8 +481,8 @@ def budget_view(request):
         for item in expense_transactions.values('debit_account__name').annotate(total=Sum('amount'))
     }
 
-    all_income_accounts = Account.objects.filter(owner=request.user, type='수익')
-    all_expense_accounts = Account.objects.filter(owner=request.user, type='비용')
+    all_income_accounts = Account.objects.filter(owner=request.user, type='수익', is_active=True)
+    all_expense_accounts = Account.objects.filter(owner=request.user, type='비용', is_active=True)
 
     fixed_income_details = []
     other_income_total = 0
@@ -555,6 +564,19 @@ def settings_view(request):
     user_accounts = Account.objects.filter(owner=request.user).order_by('type', 'name')
     user_presets = TransactionPreset.objects.filter(owner=request.user).order_by('preset_type', 'name')
 
+    # 프리셋 생성을 위한 그룹화된 계정 목록
+    debit_accounts_grouped = {}
+    credit_accounts_grouped = {}
+    active_accounts = Account.objects.filter(owner=request.user, is_active=True).order_by('type', 'name')
+    
+    for acc in active_accounts.exclude(type='수익'):
+        if acc.type not in debit_accounts_grouped: debit_accounts_grouped[acc.type] = []
+        debit_accounts_grouped[acc.type].append(acc)
+    
+    for acc in active_accounts.exclude(type='비용'):
+        if acc.type not in credit_accounts_grouped: credit_accounts_grouped[acc.type] = []
+        credit_accounts_grouped[acc.type].append(acc)
+
     context = {
         'user_profile_form': user_profile_form,
         'password_form': password_form,
@@ -562,6 +584,8 @@ def settings_view(request):
         'preset_form': preset_form,
         'user_accounts': user_accounts,
         'user_presets': user_presets,
+        'debit_accounts_grouped': debit_accounts_grouped,
+        'credit_accounts_grouped': credit_accounts_grouped,
     }
     return render(request, 'account/settings.html', context)
 
@@ -576,7 +600,26 @@ def preset_update(request, pk):
             return redirect(reverse('account:settings') + '#preset-section')
     else:
         form = TransactionPresetForm(instance=preset, user=request.user)
-    return render(request, 'account/preset_form_update.html', {'form': form})
+    
+    # 프리셋 수정을 위한 그룹화된 계정 목록
+    debit_accounts_grouped = {}
+    credit_accounts_grouped = {}
+    active_accounts = Account.objects.filter(owner=request.user, is_active=True).order_by('type', 'name')
+    
+    for acc in active_accounts.exclude(type='수익'):
+        if acc.type not in debit_accounts_grouped: debit_accounts_grouped[acc.type] = []
+        debit_accounts_grouped[acc.type].append(acc)
+    
+    for acc in active_accounts.exclude(type='비용'):
+        if acc.type not in credit_accounts_grouped: credit_accounts_grouped[acc.type] = []
+        credit_accounts_grouped[acc.type].append(acc)
+
+    return render(request, 'account/preset_form_update.html', {
+        'form': form,
+        'debit_accounts_grouped': debit_accounts_grouped,
+        'credit_accounts_grouped': credit_accounts_grouped,
+        'preset': preset
+    })
 
 @login_required
 def preset_delete(request, pk):
@@ -674,7 +717,7 @@ def reports_view(request):
         form = BudgetForm(user=request.user)
 
     # --- 데이터 준비 (이전과 동일) ---
-    all_expense_accounts = Account.objects.filter(owner=request.user, type='비용').order_by('name')
+    all_expense_accounts = Account.objects.filter(owner=request.user, type='비용', is_active=True).order_by('name')
     fixed_expense_accounts = all_expense_accounts.filter(category='FIXED')
     
     monthly_spending_query = Transaction.objects.filter(

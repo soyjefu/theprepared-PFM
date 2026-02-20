@@ -1,151 +1,331 @@
 {% extends "account/base.html" %}
-{% block title %}환경설정{% endblock %}
+{% load humanize %}
+
+{% block title %}환경설정 - PFM{% endblock %}
 
 {% block extra_style %}
 <style>
-    .settings-section { margin-bottom: 2.5em; padding: 20px; border: 1px solid #dee2e6; border-radius: 8px; }
-    .settings-section h2 { margin-top: 0; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
-    .item-list { list-style: none; padding: 0; }
-    .item-list li { padding: 8px 0; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
-    .item-actions a { margin-left: 10px; text-decoration: none; }
-    .form-container form p { margin: 10px 0; }
-    .form-container label { display: inline-block; min-width: 120px; }
+    .settings-card { border: none; }
+    .settings-nav .nav-link { color: var(--bs-body-color); padding: 1rem 1.5rem; border-radius: 0; border-left: 3px solid transparent; }
+    .settings-nav .nav-link.active { background-color: var(--bs-primary-bg-subtle); color: var(--bs-primary); border-left-color: var(--bs-primary); }
+    .account-inactive { opacity: 0.5; text-decoration: line-through; }
+    .form-label { font-weight: 600; font-size: 0.9rem; }
 </style>
 {% endblock %}
 
 {% block content %}
-    <h1>환경설정</h1>
-    {% if messages %}
-        {% for message in messages %}
-            <div class="message {{ message.tags }}" style="padding: 10px; background-color: #d4edda; border-radius: 5px; margin-bottom: 1em;">
-                {{ message }}
+<div class="row g-4">
+    <!-- 왼쪽 사이드바 메뉴 -->
+    <div class="col-md-3">
+        <div class="card shadow-sm border-0 sticky-top" style="top: 100px;">
+            <div class="list-group list-group-flush settings-nav" id="settings-tabs">
+                <a href="#preset-section" class="list-group-item list-group-item-action active"><i class="fa-solid fa-star me-2"></i>거래 프리셋</a>
+                <a href="#account-section" class="list-group-item list-group-item-action"><i class="fa-solid fa-building-columns me-2"></i>회계 계정</a>
+                <a href="#profile-section" class="list-group-item list-group-item-action"><i class="fa-solid fa-user-circle me-2"></i>프로필 정보</a>
+                <a href="#password-section" class="list-group-item list-group-item-action"><i class="fa-solid fa-lock me-2"></i>비밀번호 변경</a>
             </div>
-        {% endfor %}
-    {% endif %}
-
-    <!-- 1. 거래 프리셋 관리 (id 추가) -->
-    <div class="settings-section" id="preset-section">
-        <h2>1. 거래 프리셋 관리</h2>
-        <div class="form-container">
-            <h3>새 프리셋 추가</h3>
-            <form method="post">
-                {% csrf_token %}
-                {{ preset_form.as_p }}
-                <button type="submit" name="add_preset">프리셋 추가</button>
-            </form>
         </div>
-        <hr>
-        <h3>현재 프리셋 목록</h3>
-        <ul class="item-list">
-            {% for preset in user_presets %}
-                <li>
-                    <span>{{ preset.name }} ({{ preset.get_preset_type_display }}) - {{ preset.item }}</span>
-                    <div class="item-actions">
-                        <a href="{% url 'account:preset_update' preset.pk %}">수정</a>
-                        <a href="{% url 'account:preset_delete' preset.pk %}">삭제</a>
-                    </div>
-                </li>
-            {% empty %}
-                <li>등록된 프리셋이 없습니다.</li>
-            {% endfor %}
-        </ul>
     </div>
 
-    <!-- 2. 회계 계정 항목 관리 (id 추가) -->
-    <div class="settings-section" id="account-section">
-        <h2>2. 회계 계정 항목 관리</h2>
-        <div id="add-account-form">
-            <div class="form-container">
-                <h3>새 계정 항목 추가</h3>
-                <form method="post">
+    <!-- 오른쪽 설정 내용 -->
+    <div class="col-md-9">
+        <!-- 거래 프리셋 섹션 -->
+        <div class="card shadow-sm mb-4" id="preset-section">
+            <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+                <h4 class="fw-bold mb-0">거래 프리셋 관리</h4>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#addPresetForm">
+                    <i class="fa-solid fa-plus me-1"></i>새 프리셋
+                </button>
+            </div>
+            <div class="card-body px-4 pb-4">
+                <div class="collapse mb-4" id="addPresetForm">
+                    <div class="p-4 bg-body-tertiary rounded border shadow-sm">
+                        <h5 class="fw-bold mb-3 text-primary"><i class="fa-solid fa-plus-circle me-2"></i>새 프리셋 추가</h5>
+                        <form method="post" class="row g-3">
+                            {% csrf_token %}
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary">프리셋 이름</label>
+                                {{ preset_form.name }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary">프리셋 타입</label>
+                                {{ preset_form.preset_type }}
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold text-secondary">아이템</label>
+                                {{ preset_form.item }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary">금액</label>
+                                {{ preset_form.amount }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary">고정 일자 (1-31)</label>
+                                {{ preset_form.day_of_month }}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-primary">차변 계정 (+)</label>
+                                <select name="debit_account" class="form-select" required>
+                                    <option value="">--- 항목 선택 ---</option>
+                                    {% for type, accounts in debit_accounts_grouped.items %}
+                                        <optgroup label="{{ type }}">
+                                            {% for acc in accounts %}
+                                                <option value="{{ acc.id }}">
+                                                    {% if acc.type == '자산' or acc.type == '비용' %}+{% else %}-{% endif %} {{ acc.name }}
+                                                </option>
+                                            {% endfor %}
+                                        </optgroup>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-danger">대변 계정 (-)</label>
+                                <select name="credit_account" class="form-select" required>
+                                    <option value="">--- 항목 선택 ---</option>
+                                    {% for type, accounts in credit_accounts_grouped.items %}
+                                        <optgroup label="{{ type }}">
+                                            {% for acc in accounts %}
+                                                <option value="{{ acc.id }}">
+                                                    {% if acc.type == '부채' or acc.type == '수익' or acc.type == '순자산' %}+{% else %}-{% endif %} {{ acc.name }}
+                                                </option>
+                                            {% endfor %}
+                                        </optgroup>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="col-12 text-end mt-4">
+                                <button type="submit" name="add_preset" class="btn btn-primary px-5 fw-bold py-2 shadow-sm">
+                                    저장 및 프리셋 추가
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light small">
+                            <tr>
+                                <th>프리셋 이름</th>
+                                <th>타입</th>
+                                <th>기본 아이템</th>
+                                <th class="text-end">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for preset in user_presets %}
+                            <tr>
+                                <td class="fw-bold">{{ preset.name }}</td>
+                                <td><span class="badge bg-secondary-subtle text-secondary">{{ preset.get_preset_type_display }}</span></td>
+                                <td>{{ preset.item }}</td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'account:preset_update' preset.pk %}" class="btn btn-outline-secondary"><i class="fa-solid fa-pen"></i></a>
+                                        <a href="{% url 'account:preset_delete' preset.pk %}" class="btn btn-outline-danger"><i class="fa-solid fa-trash"></i></a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center py-4 text-secondary small">등록된 프리셋이 없습니다.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 회계 계정 항목 관리 섹션 -->
+        <div class="card shadow-sm mb-4" id="account-section">
+            <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+                <h4 class="fw-bold mb-0">회계 계정 관리</h4>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#addAccountForm">
+                    <i class="fa-solid fa-plus me-1"></i>새 계좌/항목
+                </button>
+            </div>
+            <div class="card-body px-4 pb-4">
+                <div class="collapse mb-4" id="addAccountForm">
+                    <div class="p-4 bg-body-tertiary rounded border" id="account-form-wrapper">
+                        <h5 class="fw-bold mb-1">새 계정 항목 추가</h5>
+                        <p class="text-secondary small mb-3">차변(+)은 자산 증가/비용 발생, 대변(-)은 부채 증가/수익 발생을 의미합니다.</p>
+                        <form method="post" class="row g-3">
+                            {% csrf_token %}
+                            {% for field in account_form %}
+                            <div class="{% if field.name == 'is_active' %}col-12 mt-3{% else %}col-md-6{% endif %}">
+                                {% if field.name == 'is_active' %}
+                                <div class="form-check form-switch p-3 bg-white rounded border">
+                                    {{ field }}
+                                    <label class="form-check-label fw-bold ms-2">{{ field.label }}</label>
+                                </div>
+                                {% else %}
+                                <label class="form-label small fw-bold">
+                                    {{ field.label }}
+                                    {% if field.name == 'debit_account' or field.name == 'account' %}(+){% endif %}
+                                    {% if field.name == 'credit_account' %}(-){% endif %}
+                                </label>
+                                {{ field }}
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                            <div class="col-12 text-end">
+                                <button type="submit" name="add_account" class="btn btn-primary px-4">계정 추가</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light small">
+                            <tr>
+                                <th>계정명</th>
+                                <th>구분</th>
+                                <th>유형</th>
+                                <th class="text-center">상태</th>
+                                <th class="text-end">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for account in user_accounts %}
+                            <tr class="{% if not account.is_active %}table-light text-secondary{% endif %}">
+                                <td class="fw-bold {% if not account.is_active %}account-inactive{% endif %}">
+                                    {{ account.name }}
+                                </td>
+                                <td>{{ account.type }}</td>
+                                <td>{{ account.get_category_display }}</td>
+                                <td class="text-center">
+                                    {% if account.is_active %}
+                                    <span class="badge bg-success-subtle text-success">사용중</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary">숨김</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'account:account_update' account.pk %}" class="btn btn-outline-secondary"><i class="fa-solid fa-pen"></i></a>
+                                        <a href="{% url 'account:account_delete' account.pk %}" class="btn btn-outline-danger"><i class="fa-solid fa-trash"></i></a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="text-center py-4 text-secondary small">등록된 계정이 없습니다.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 사용자 프로필 관리 섹션 -->
+        <div class="card shadow-sm mb-4" id="profile-section">
+            <div class="card-header bg-transparent border-0 pt-4 px-4">
+                <h4 class="fw-bold mb-0">프로필 설정</h4>
+            </div>
+            <div class="card-body p-4">
+                <form method="post" class="row g-3">
                     {% csrf_token %}
-                    {{ account_form.as_p }}
-                    <button type="submit" name="add_account">계정 추가</button>
+                    {% for field in user_profile_form %}
+                    <div class="col-md-6">
+                        <label class="form-label">{{ field.label }}</label>
+                        <input type="{{ field.field.widget.input_type|default:'text' }}" name="{{ field.name }}" value="{{ field.value|default:'' }}" class="form-control" {% if field.field.required %}required{% endif %}>
+                    </div>
+                    {% endfor %}
+                    <div class="col-12 text-end mt-4">
+                        <button type="submit" name="update_profile" class="btn btn-dark px-4">정보 업데이트</button>
+                    </div>
                 </form>
             </div>
         </div>
-        <hr>
-        <h3>현재 계정 목록</h3>
-        <ul class="item-list">
-            {% for account in user_accounts %}
-                <li>
-                    <span>{{ account.name }} ({{ account.type }})</span>
-                    <div class="item-actions">
-                        <a href="{% url 'account:account_update' account.pk %}">수정</a>
-                        <a href="{% url 'account:account_delete' account.pk %}">삭제</a>
+
+        <!-- 비밀번호 변경 섹션 -->
+        <div class="card shadow-sm mb-4" id="password-section">
+            <div class="card-header bg-transparent border-0 pt-4 px-4 text-danger">
+                <h4 class="fw-bold mb-0">비밀번호 변경</h4>
+            </div>
+            <div class="card-body p-4">
+                <form method="post" class="row g-3">
+                    {% csrf_token %}
+                    {% for field in password_form %}
+                    <div class="col-md-4">
+                        <label class="form-label">{{ field.label }}</label>
+                        <input type="password" name="{{ field.name }}" class="form-control" required>
                     </div>
-                </li>
-            {% empty %}
-                <li>등록된 계정이 없습니다.</li>
-            {% endfor %}
-        </ul>
+                    {% endfor %}
+                    <div class="col-12 text-end mt-4">
+                        <button type="submit" name="change_password" class="btn btn-danger px-4">비밀번호 변경</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
+</div>
 
-    <!-- 3. 사용자 계정 변경 (id 추가) -->
-    <div class="settings-section" id="profile-section">
-        <h2>3. 사용자 계정 변경</h2>
-        <form method="post">
-            {% csrf_token %}
-            {{ user_profile_form.as_p }}
-            <button type="submit" name="update_profile">정보 수정</button>
-        </form>
-    </div>
+{% endblock %}
 
-    <!-- 4. 비밀번호 변경 (id 추가) -->
-    <div class="settings-section" id="password-section">
-        <h2>4. 비밀번호 변경</h2>
-        <form method="post">
-            {% csrf_token %}
-            {{ password_form.as_p }}
-            <button type="submit" name="change_password">비밀번호 변경</button>
-        </form>
-    </div>
+{% block extra_script %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 계정 타입별 카테고리 동적 변경
+        const accountFormWrapper = document.getElementById('account-form-wrapper');
+        const typeSelect = accountFormWrapper.querySelector('[name="type"]');
+        const categorySelect = accountFormWrapper.querySelector('[name="category"]');
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const formWrapper = document.getElementById('add-account-form');
-            const typeSelect = formWrapper.querySelector('#id_type');
-            const categorySelect = formWrapper.querySelector('#id_category');
+        const categoryOptions = {
+            '자산': [
+                { value: 'GENERAL', text: '일반' },
+                { value: 'VARIABLE', text: '유동' },
+                { value: 'SAVING', text: '저축' }
+            ],
+            '부채': [
+                { value: 'GENERAL', text: '일반' },
+                { value: 'VARIABLE', text: '유동' }
+            ],
+            '수익': [
+                { value: 'FIXED', text: '고정' },
+                { value: 'VARIABLE', text: '유동' }
+            ],
+            '비용': [
+                { value: 'FIXED', text: '고정' },
+                { value: 'VARIABLE', text: '유동' }
+            ],
+            '순자산': [
+                { value: 'GENERAL', text: '일반' }
+            ]
+        };
 
-            const categoryOptions = {
-                '자산': [
-                    { value: 'GENERAL', text: '일반' },
-                    { value: 'VARIABLE', text: '유동' },
-                    { value: 'SAVING', text: '저축' }
-                ],
-                '부채': [
-                    { value: 'GENERAL', text: '일반' },
-                    { value: 'VARIABLE', text: '유동' }
-                ],
-                '수익': [
-                    { value: 'FIXED', text: '고정' },
-                    { value: 'VARIABLE', text: '유동' }
-                ],
-                '비용': [
-                    { value: 'FIXED', text: '고정' },
-                    { value: 'VARIABLE', text: '유동' }
-                ],
-                '순자산': [
-                    { value: 'GENERAL', text: '일반' }
-                ]
-            };
+        function updateCategoryOptions() {
+            const selectedType = typeSelect.value;
+            const options = categoryOptions[selectedType] || [];
+            const currentValue = categorySelect.value;
+            
+            categorySelect.innerHTML = '';
+            options.forEach(opt => {
+                const optionElement = document.createElement('option');
+                optionElement.value = opt.value;
+                optionElement.textContent = opt.text;
+                if (opt.value === currentValue) optionElement.selected = true;
+                categorySelect.appendChild(optionElement);
+            });
+        }
 
-            function updateCategoryOptions() {
-                const selectedType = typeSelect.value;
-                const options = categoryOptions[selectedType] || [];
-                
-                categorySelect.innerHTML = ''; // 기존 옵션 삭제
-
-                options.forEach(opt => {
-                    const optionElement = document.createElement('option');
-                    optionElement.value = opt.value;
-                    optionElement.textContent = opt.text;
-                    categorySelect.appendChild(optionElement);
-                });
-            }
-
+        if (typeSelect) {
             typeSelect.addEventListener('change', updateCategoryOptions);
-            updateCategoryOptions(); // 페이지 로드 시 초기화
-        });
-    </script>
+            updateCategoryOptions();
+        }
+
+        // 스크롤 시 스파이 메뉴 활성화 (간단 구현)
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    document.querySelectorAll('.settings-nav .list-group-item').forEach(link => {
+                        link.classList.toggle('active', link.getAttribute('href') === '#' + entry.target.id);
+                    });
+                }
+            });
+        }, { threshold: 0.5 });
+
+        document.querySelectorAll('.card[id]').forEach(section => observer.observe(section));
+    });
+</script>
 {% endblock %}

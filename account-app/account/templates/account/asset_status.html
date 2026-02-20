@@ -1,222 +1,283 @@
 {% extends "account/base.html" %}
 {% load humanize %}
 
-{% block title %}자산 현황{% endblock %}
+{% block title %}자산 현황 - PFM{% endblock %}
 
 {% block extra_style %}
 <style>
-    /* ▼▼▼ 과거 버전의 모든 스타일을 복구했습니다 ▼▼▼ */
-    .status-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; text-align: center; background-color: #f8f9fa; padding: 20px; border-radius: 8px; }
-    .status-item h2 { margin: 0; font-size: 1.2em; color: #6c757d; }
-    .status-item p { margin: 5px 0 0; font-size: 2.2em; font-weight: 500; }
-    .net-worth { color: #007bff; }
-    .content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 2em; }
-    .account-list h3 { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #dee2e6; padding-bottom: 0.5em; }
-    .column-total { font-size: 0.8em; font-weight: normal; }
-    .bar-item { margin-bottom: 1.5em; }
-    .bar-info { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; font-size: 1em; }
-    .bar-info .balance-current { font-size: 1.2em; font-weight: 500; color: #000; }
-    .bar-info .balance-total { color: #6c757d; }
-    .bar-container { background-color: #e9ecef; border-radius: 5px; height: 12px; width: 100%; overflow: hidden; }
-    .bar { height: 100%; border-radius: 5px; }
-    .bar.asset { background-color: #8A2BE2; }
-    .bar.saving { background-color: #32CD32; }
-    .bar.liability { background-color: #007BA7; }
-    .negative .bar { background-color: #dc3545; }
-    .summary-section { margin-top: 2em; padding: 20px; border: 1px solid #dee2e6; border-radius: 8px; }
-    .summary-section p { margin: 0.5em 0; }
-    
-    /* 차트 스타일은 그대로 유지합니다 */
-    .chart-card {
-        margin-top: 1em;
-        margin-bottom: 2em;
-        padding: 20px;
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
+    .net-worth-card {
+        background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+        color: white;
     }
-    .chart-container {
-        position: relative;
-        height: 400px;
-        width: 100%;
+    .progress {
+        height: 10px;
+        border-radius: 5px;
+    }
+    .account-row:hover {
+        background-color: rgba(var(--bs-tertiary-bg-rgb), 0.5);
+    }
+    .balance-main {
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    .balance-sub {
+        font-size: 0.85rem;
+        color: var(--bs-body-secondary-color);
     }
 </style>
 {% endblock %}
 
 {% block content %}
-    <h1>자산 현황</h1>
-
-    <div class="chart-card">
-        <h2>월별 순자산 추이</h2>
-        <div class="chart-container">
-            <canvas id="netWorthChart"></canvas>
-        </div>
+<div class="d-flex justify-content-between align-items-end mb-4">
+    <div>
+        <h2 class="fw-bold mb-0">자산 현황</h2>
+        <p class="text-secondary mb-0">전체 자산 및 부채 현황을 확인하세요.</p>
     </div>
-
-    <div class="status-container">
-        <div class="status-item">
-            <h2>현재 순자산</h2>
-            <p class="net-worth">{{ current_net_worth|intcomma }}</p>
-        </div>
-        <div class="status-item">
-            <h2>최종 순자산 (미래 포함)</h2>
-            <p>{{ net_worth|intcomma }}</p>
-        </div>
-    </div>
-
-    <div class="content-grid">
-        <div class="account-list">
-            <h3>
-                <span>자산</span>
-                <span class="column-total">
-                    (<span class="balance-current">{{ current_total_assets|intcomma }}</span>
-                    / <span class="balance-total">{{ total_assets|intcomma }}</span>)
-                </span>
-            </h3>
-            {% for account in assets %}
-            <div class="bar-item {% if account.current_balance < 0 %}negative{% endif %}">
-                <div class="bar-info">
-                    <span>{{ account.name }}</span>
-                    <span class="balance">
-                        (<span class="balance-current">{{ account.current_balance|intcomma }}</span>
-                        / <span class="balance-total">{{ account.total_balance|intcomma }}</span>)
-                    </span>
-                </div>
-                <div class="bar-container">
-                    <div class="bar asset" style="width: {% widthratio account.current_balance|slice:'1:'|add:'0' max_graph_value 100 %}%;"></div>
-                </div>
-            </div>
-            {% endfor %}
-            
-            <h3 style="margin-top: 2em;">
-                <span>저축</span>
-                <span class="column-total">
-                    (<span class="balance-current">{{ current_total_savings|intcomma }}</span>
-                    / <span class="balance-total">{{ total_savings|intcomma }}</span>)
-                </span>
-            </h3>
-            {% for account in savings %}
-            <div class="bar-item">
-                <div class="bar-info">
-                    <span>{{ account.name }}</span>
-                    <span class="balance">
-                        (<span class="balance-current">{{ account.current_balance|intcomma }}</span>
-                        / <span class="balance-total">{{ account.total_balance|intcomma }}</span>)
-                    </span>
-                </div>
-                <div class="bar-container">
-                    <div class="bar saving" style="width: {% widthratio account.current_balance max_graph_value 100 %}%;"></div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        <div class="account-list">
-            <h3>
-                <span>부채</span>
-                <span class="column-total">
-                    (<span class="balance-current">{{ current_total_liabilities|intcomma }}</span>
-                    / <span class="balance-total">{{ total_liabilities|intcomma }}</span>)
-                </span>
-            </h3>
-            {% for account in liabilities %}
-            <div class="bar-item">
-                <div class="bar-info">
-                    <span>{{ account.name }}</span>
-                    <span class="balance">
-                        (<span class="balance-current">{{ account.current_balance|intcomma }}</span>
-                        / <span class="balance-total">{{ account.total_balance|intcomma }}</span>)
-                    </span>
-                </div>
-                <div class="bar-container">
-                    <div class="bar liability" style="width: {% widthratio account.current_balance max_graph_value 100 %}%;"></div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-
-    <div class="summary-section">
-        <h2>월별 손익 현황</h2>
-        <form method="get">
-            <select name="year" onchange="this.form.submit()">
+    <div class="d-flex gap-2">
+        <form method="get" class="d-flex gap-2 align-items-center bg-body-tertiary p-2 rounded border">
+            <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
                 {% for y in years %}
                 <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}년</option>
                 {% endfor %}
             </select>
-            <select name="month" onchange="this.form.submit()">
+            <select name="month" class="form-select form-select-sm" onchange="this.form.submit()">
                 {% for m in months %}
                 <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }}월</option>
                 {% endfor %}
             </select>
+            <span class="text-nowrap small text-secondary me-1">손익 기준</span>
         </form>
-        <hr>
-        <p><strong>수입:</strong> {{ monthly_income|intcomma }}원</p>
-        <p><strong>비용:</strong> {{ monthly_expense|intcomma }}원</p>
-        <p><strong>저축:</strong> {{ monthly_savings|intcomma }}원</p>
-        <p><strong>부채상환:</strong> {{ monthly_repayments|intcomma }}원</p>
-        <hr>
-        <p><strong>순이익 (수입 - 비용):</strong> {{ monthly_net_profit|intcomma }}원</p>
-        <p><strong>가용 현금 (순이익 - 저축 - 부채상환):</strong> {{ available_cash|intcomma }}원</p>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- 순자산 요약 카드 -->
+    <div class="col-md-6">
+        <div class="card net-worth-card h-100 border-0 shadow-sm">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <h5 class="card-title opacity-75 mb-0">현재 순자산</h5>
+                    <i class="fa-solid fa-piggy-bank fs-4 opacity-50"></i>
+                </div>
+                <h1 class="display-5 fw-bold mb-3">{{ current_net_worth|intcomma }}<span class="fs-4 ms-1">원</span></h1>
+                <div class="d-flex justify-content-between border-top border-white border-opacity-25 pt-3">
+                    <span class="opacity-75 small">최종 순자산 (미래 포함)</span>
+                    <span class="fw-bold">{{ net_worth|intcomma }}원</span>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const canvasElement = document.getElementById('netWorthChart');
-        if (canvasElement) {
-            const ctx = canvasElement.getContext('2d');
-            const chartDataJson = '{{ chart_data_json|safe }}';
-            try {
-                const chartData = JSON.parse(chartDataJson);
-                if (chartData.labels && chartData.labels.length > 0) {
-                    new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: chartData.labels,
-                            datasets: [{
-                                label: '월말 순자산',
-                                data: chartData.net_worth_data,
-                                borderColor: 'rgba(75, 192, 192, 1)',
-                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                                fill: true,
-                                tension: 0.1
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            scales: {
-                                y: {
-                                    ticks: {
-                                        callback: function(value) {
-                                            return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(value);
-                                        }
+    <!-- 월별 손익 요약 카드 -->
+    <div class="col-md-6">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body p-4">
+                <h5 class="card-title text-secondary mb-4">{{ selected_month }}월 손익 요약</h5>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <p class="text-secondary mb-1 small">수입</p>
+                        <p class="fw-bold text-success mb-0">+{{ monthly_income|intcomma }}원</p>
+                    </div>
+                    <div class="col-6">
+                        <p class="text-secondary mb-1 small">비용</p>
+                        <p class="fw-bold text-danger mb-0">-{{ monthly_expense|intcomma }}원</p>
+                    </div>
+                    <div class="col-6 border-top pt-2">
+                        <p class="text-secondary mb-1 small">순이익</p>
+                        <p class="fw-bold mb-0 {% if monthly_net_profit >= 0 %}text-primary{% else %}text-danger{% endif %}">
+                            {{ monthly_net_profit|intcomma }}원
+                        </p>
+                    </div>
+                    <div class="col-6 border-top pt-2">
+                        <p class="text-secondary mb-1 small">가용 현금</p>
+                        <p class="fw-bold text-dark-emphasis mb-0">{{ available_cash|intcomma }}원</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 순자산 추이 차트 -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-transparent border-0 pt-4 px-4">
+        <h5 class="fw-bold mb-0">월별 순자산 추이</h5>
+    </div>
+    <div class="card-body p-4">
+        <div style="height: 300px;">
+            <canvas id="netWorthChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- 자산 목록 -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0">자산 및 저축</h5>
+                <span class="badge bg-primary-subtle text-primary">{{ current_total_assets|add:current_total_savings|intcomma }}원</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-secondary small">
+                            <tr>
+                                <th class="px-4 border-0">항목명</th>
+                                <th class="border-0">현재 잔액 / 최종 잔액</th>
+                                <th class="border-0 text-end px-4" style="width: 200px;">비중</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for account in assets %}
+                            <tr class="account-row">
+                                <td class="px-4 border-0">
+                                    <div class="fw-medium">{{ account.name }}</div>
+                                    <div class="small text-secondary">{{ account.get_category_display }}</div>
+                                </td>
+                                <td class="border-0">
+                                    <div class="balance-main">{{ account.current_balance|intcomma }}원</div>
+                                    <div class="balance-sub">{{ account.total_balance|intcomma }}원</div>
+                                </td>
+                                <td class="px-4 border-0">
+                                    <div class="progress bg-primary-subtle">
+                                        <div class="progress-bar bg-primary" style="width: {% widthratio account.current_balance|slice:'1:'|add:'0' max_graph_value 100 %}%;"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="table-light"><td colspan="3" class="px-4 py-1 small fw-bold text-secondary">저축 항목</td></tr>
+                            {% for account in savings %}
+                            <tr class="account-row">
+                                <td class="px-4 border-0">
+                                    <div class="fw-medium">{{ account.name }}</div>
+                                    <div class="small text-secondary">저축</div>
+                                </td>
+                                <td class="border-0">
+                                    <div class="balance-main">{{ account.current_balance|intcomma }}원</div>
+                                    <div class="balance-sub">{{ account.total_balance|intcomma }}원</div>
+                                </td>
+                                <td class="px-4 border-0">
+                                    <div class="progress bg-success-subtle">
+                                        <div class="progress-bar bg-success" style="width: {% widthratio account.current_balance max_graph_value 100 %}%;"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 부채 목록 -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-danger-subtle">
+            <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-danger">부채</h5>
+                <span class="badge bg-danger-subtle text-danger">{{ current_total_liabilities|intcomma }}원</span>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for account in liabilities %}
+                    <li class="list-group-item px-4 py-3 border-0 account-row">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <div class="fw-medium">{{ account.name }}</div>
+                                <div class="small text-secondary">부채</div>
+                            </div>
+                            <div class="text-end">
+                                <div class="balance-main text-danger">{{ account.current_balance|intcomma }}원</div>
+                                <div class="balance-sub">{{ account.total_balance|intcomma }}원</div>
+                            </div>
+                        </div>
+                        <div class="progress bg-danger-subtle">
+                            <div class="progress-bar bg-danger" style="width: {% widthratio account.current_balance max_graph_value 100 %}%;"></div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_script %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const canvasElement = document.getElementById('netWorthChart');
+    if (canvasElement) {
+        const ctx = canvasElement.getContext('2d');
+        const chartDataJson = '{{ chart_data_json|safe }}';
+        
+        // Theme-aware colors
+        const isDarkMode = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
+        const textColor = isDarkMode ? '#adb5bd' : '#6c757d';
+
+        try {
+            const chartData = JSON.parse(chartDataJson);
+            if (chartData.labels && chartData.labels.length > 0) {
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: '월말 순자산',
+                            data: chartData.net_worth_data,
+                            borderColor: '#0d6efd',
+                            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#0d6efd'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                grid: { color: gridColor },
+                                ticks: {
+                                    color: textColor,
+                                    callback: function(value) {
+                                        return (value / 10000).toLocaleString() + '만';
                                     }
                                 }
                             },
-                            plugins: {
-                                tooltip: {
-                                    callbacks: {
-                                        label: function(context) {
-                                            let label = context.dataset.label || '';
-                                            if (label) { label += ': '; }
-                                            if (context.parsed.y !== null) {
-                                                label += new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(context.parsed.y);
-                                            }
-                                            return label;
-                                        }
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: textColor }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: isDarkMode ? '#212529' : '#fff',
+                                titleColor: isDarkMode ? '#fff' : '#212529',
+                                bodyColor: isDarkMode ? '#fff' : '#212529',
+                                borderColor: '#0d6efd',
+                                borderWidth: 1,
+                                padding: 12,
+                                displayColors: false,
+                                callbacks: {
+                                    label: function(context) {
+                                        return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(context.parsed.y);
                                     }
                                 }
                             }
                         }
-                    });
-                } else {
-                    ctx.textAlign = 'center';
-                    ctx.font = '16px Arial';
-                    ctx.fillText('차트를 표시할 거래 내역이 없습니다.', canvasElement.width / 2, 50);
-                }
-            } catch (e) {
-                console.error('차트 데이터 파싱 오류:', e);
+                    }
+                });
             }
+        } catch (e) {
+            console.error('Chart error:', e);
         }
-    });
-    </script>
+    }
+});
+</script>
 {% endblock %}

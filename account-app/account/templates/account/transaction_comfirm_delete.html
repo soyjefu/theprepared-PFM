@@ -1,14 +1,31 @@
 {% extends "account/base.html" %}
 
-{% block title %}거래 삭제 확인{% endblock %}
+{% block title %}거래 삭제 확인 - PFM{% endblock %}
 
 {% block content %}
-    <h1>정말 삭제하시겠습니까?</h1>
-    <p>"{{ transaction.date }} - {{ transaction.item }} ({{ transaction.amount }})"</p>
-    
-    <form method="post" action="?next={{ next }}">
-        {% csrf_token %}
-        <button type="submit">네, 삭제합니다.</button>
-        <a href="{{ next }}">아니요, 취소합니다.</a>
-    </form>
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-sm border-danger mt-5">
+            <div class="card-body p-4 p-md-5 text-center">
+                <div class="text-danger mb-4">
+                    <i class="fa-solid fa-trash-can fs-1"></i>
+                </div>
+                <h3 class="fw-bold mb-3">거래를 삭제하시겠습니까?</h3>
+                <div class="p-3 bg-body-tertiary rounded mb-4 text-start">
+                    <div class="fw-bold mb-1">{{ transaction.item }}</div>
+                    <div class="small text-secondary">{{ transaction.date|date:"Y-m-d" }} · {{ transaction.amount|intcomma }}원</div>
+                    <div class="extra-small text-secondary mt-1 opacity-75">{{ transaction.debit_account.name }} ↔ {{ transaction.credit_account.name }}</div>
+                </div>
+                
+                <form method="post" action="?next={{ next }}">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger btn-lg fw-bold py-2">삭제 완료</button>
+                        <a href="{{ next }}" class="btn btn-outline-secondary">취소하고 돌아가기</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

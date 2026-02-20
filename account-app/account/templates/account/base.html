@@ -1,70 +1,229 @@
-{% load humanize %}
+{% load static %}{% load humanize %}
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}나의 가계부{% endblock %}</title>
+    <title>{% block title %}PFM - 나의 가계부{% endblock %}</title>
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Tom Select (Searchable Dropdowns) -->
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* 기본 스타일 및 모바일 최적화 */
+        :root {
+            --bs-body-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            font-weight: 400;
-            padding: 1em;
-            margin: 0;
-            background-color: #f4f4f9;
+            background-color: var(--bs-tertiary-bg);
+            min-height: 100vh;
         }
-        .container {
-            max-width: 960px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        .navbar-brand {
+            font-weight: 700;
+            letter-spacing: -0.5px;
         }
-        /* 네비게이션 메뉴 스타일 */
-        nav {
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap; /* 모바일 화면에서 줄바꿈 허용 */
-            background-color: #343a40;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 20px;
+        .main-container {
+            padding-top: 2rem;
+            padding-bottom: 4rem;
         }
-        nav a {
-            color: white;
-            text-decoration: none;
-            padding: 10px 15px;
-            font-weight: 500;
+        .card {
+            border: none;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            margin-bottom: 1.5rem;
         }
-        nav a:hover {
-            background-color: #495057;
-            border-radius: 5px;
+        [data-bs-theme="dark"] .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.5);
+        }
+        /* 다크모드 가독성 개선 */
+        [data-bs-theme="dark"] .text-secondary {
+            color: #adb5bd !important;
+        }
+        [data-bs-theme="dark"] .text-body-secondary {
+            color: #adb5bd !important;
+        }
+        [data-bs-theme="dark"] .opacity-75 {
+            opacity: 0.85 !important;
+        }
+        [data-bs-theme="dark"] .opacity-50 {
+            opacity: 0.7 !important;
+        }
+        /* Tom Select 다크모드 보정 */
+        [data-bs-theme="dark"] .ts-control {
+            background-color: var(--bs-body-bg) !important;
+            color: var(--bs-body-color) !important;
+            border-color: var(--bs-border-color) !important;
+        }
+        [data-bs-theme="dark"] .ts-dropdown {
+            background-color: #2b3035 !important;
+            color: #dee2e6 !important;
+            border-color: #495057 !important;
+        }
+        [data-bs-theme="dark"] .ts-dropdown .active {
+            background-color: #3d4246 !important;
+            color: #fff !important;
+        }
+        [data-bs-theme="dark"] .ts-dropdown .optgroup-header {
+            background-color: #343a40 !important;
+            color: #0d6efd !important;
+            font-weight: bold;
+        }
+        [data-bs-theme="dark"] .ts-dropdown .option {
+            color: #dee2e6 !important;
+        }
+        .nav-link.active {
+            font-weight: 700;
+            color: var(--bs-primary) !important;
+        }
+        /* Mobile optimization */
+        @media (max-width: 768px) {
+            .container { padding-left: 10px; padding-right: 10px; }
         }
     </style>
     {% block extra_style %}{% endblock %}
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
 </head>
 <body>
-    <div class="container">
-        <nav>
-    {% if user.is_authenticated %}
-        <a href="{% url 'account:transaction_create' %}">거래입력</a>
-        <a href="{% url 'account:transaction_list' %}">거래내역</a>
-        <a href="{% url 'account:asset_status' %}">자산현황</a>
-        <a href="{% url 'account:reports' %}">통계/예산</a>
-        <a href="{% url 'account:settings' %}">환경설정</a>
-        <a href="{% url 'account:logout' %}">로그아웃 ({{ user.username }})</a>
-    {% else %}
-        <a href="{% url 'account:login' %}">로그인</a>
-        <a href="{% url 'account:signup' %}">회원가입</a>
-    {% endif %}
-</nav>
-        
+    <nav class="navbar navbar-expand-lg sticky-top bg-body-tertiary border-bottom">
+        <div class="container">
+            <a class="navbar-brand text-primary" href="{% url 'account:index' %}">
+                <i class="fa-solid fa-wallet me-2"></i>PFM
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    {% if user.is_authenticated %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'transaction_create' %}active{% endif %}" href="{% url 'account:transaction_create' %}">
+                            <i class="fa-solid fa-plus-circle me-1"></i>거래입력
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'transaction_list' %}active{% endif %}" href="{% url 'account:transaction_list' %}">
+                            <i class="fa-solid fa-list me-1"></i>거래내역
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'asset_status' %}active{% endif %}" href="{% url 'account:asset_status' %}">
+                            <i class="fa-solid fa-chart-line me-1"></i>자산현황
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'account:reports' %}">
+                            <i class="fa-solid fa-file-invoice-dollar me-1"></i>통계/예산
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'settings' %}active{% endif %}" href="{% url 'account:settings' %}">
+                            <i class="fa-solid fa-cog me-1"></i>설정
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <div class="d-flex align-items-center">
+                    <!-- Theme Toggle -->
+                    <button class="btn btn-link nav-link me-3" id="themeToggle" title="테마 변경">
+                        <i class="fa-solid fa-moon" id="themeIcon"></i>
+                    </button>
+                    
+                    {% if user.is_authenticated %}
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fa-solid fa-user me-1"></i>{{ user.username }}
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{% url 'account:settings' %}">환경설정</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="{% url 'account:logout' %}">로그아웃</a></li>
+                        </ul>
+                    </div>
+                    {% else %}
+                    <a href="{% url 'account:login' %}" class="btn btn-primary btn-sm me-2">로그인</a>
+                    <a href="{% url 'account:signup' %}" class="btn btn-outline-primary btn-sm">회원가입</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-container">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show mb-4" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
         {% block content %}
         {% endblock %}
     </div>
+
+    <!-- Bootstrap 5.3 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Dark Mode Logic
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const htmlElement = document.documentElement;
+
+        // Check for saved theme preference
+        const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        setTheme(savedTheme);
+
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = htmlElement.getAttribute('data-bs-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            setTheme(newTheme);
+        });
+
+        function setTheme(theme) {
+            htmlElement.setAttribute('data-bs-theme', theme);
+            localStorage.setItem('theme', theme);
+            if (theme === 'dark') {
+                themeIcon.classList.replace('fa-moon', 'fa-sun');
+            } else {
+                themeIcon.classList.replace('fa-sun', 'fa-moon');
+            }
+        }
+
+        // Initialize Searchable Dropdowns (Tom Select) - 성능 최적화 버전
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('select').forEach(el => {
+                if (el.id !== 'id_year' && el.id !== 'id_month' && !el.name.includes('year') && !el.name.includes('month')) {
+                    new TomSelect(el, {
+                        create: false,
+                        // 성능 최적화 1: 정렬 로직 완전 제거 (서버 순서 유지)
+                        sortField: null,
+                        // 성능 최적화 2: 검색 필드를 'text'로 한정하여 검색 속도 향상
+                        searchField: ['text'],
+                        // 성능 최적화 3: 최대 표시 결과 제한 (렌더링 부하 감소)
+                        maxOptions: 50,
+                        hideSelected: true,
+                        openOnFocus: true, // 클릭 시 바로 검색창 열림
+                        placeholder: el.getAttribute('placeholder') || '선택하세요...',
+                        // 불필요한 플러그인 제거로 반응성 향상
+                        render: {
+                            optgroup_header: function(data, escape) {
+                                return '<div class="optgroup-header fw-bold text-primary px-3 py-1">' + escape(data.label) + '</div>';
+                            },
+                            option: function(data, escape) {
+                                return '<div class="px-3 py-1">' + escape(data.text) + '</div>';
+                            },
+                            item: function(data, escape) {
+                                return '<div class="fw-medium">' + escape(data.text) + '</div>';
+                            }
+                        }
+                    });
+                }
+            });
+        });
+    </script>
+    {% block extra_script %}{% endblock %}
 </body>
 </html>

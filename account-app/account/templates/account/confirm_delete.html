@@ -1,12 +1,30 @@
 {% extends "account/base.html" %}
-{% block title %}삭제 확인{% endblock %}
+
+{% block title %}삭제 확인 - PFM{% endblock %}
 
 {% block content %}
-    <h2>정말 삭제하시겠습니까?</h2>
-    <p>"{{ object.name }}" 항목을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.</p>
-    <form method="post">
-        {% csrf_token %}
-        <button type="submit" style="background-color: #dc3545; color: white;">예, 삭제합니다.</button>
-        <a href="{% url 'account:settings' %}">취소</a>
-    </form>
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-sm border-danger mt-5">
+            <div class="card-body p-4 p-md-5 text-center">
+                <div class="text-danger mb-4">
+                    <i class="fa-solid fa-triangle-exclamation fs-1"></i>
+                </div>
+                <h3 class="fw-bold mb-3">정말 삭제하시겠습니까?</h3>
+                <p class="text-secondary mb-4">
+                    <strong class="text-dark">"{{ object.name }}"</strong> 항목을 영구적으로 삭제합니다.<br>
+                    이 작업은 되돌릴 수 없으며, 관련된 모든 데이터에 영향을 줄 수 있습니다.
+                </p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger btn-lg fw-bold py-2">예, 영구 삭제합니다</button>
+                        <a href="{% url 'account:settings' %}" class="btn btn-outline-secondary">취소하고 돌아가기</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

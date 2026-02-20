@@ -30,6 +30,7 @@ class Account(models.Model):
         default='GENERAL',
         verbose_name='계정 유형'
     )
+    is_active = models.BooleanField(default=True, verbose_name="활성 여부")
 
     def __str__(self):
         return f"{self.name} ({self.type})"

@@ -1,15 +1,43 @@
 {% extends "account/base.html" %}
-{% block title %}로그인{% endblock %}
+
+{% block title %}로그인 - PFM{% endblock %}
+
 {% block content %}
-    <h2>로그인</h2>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <p>
-            <input type="checkbox" name="remember_me" id="remember_me">
-            <label for="remember_me">자동 로그인</label>
-        </p>
-        <button type="submit">로그인</button>
-    </form>
-    <p>계정이 없으신가요? <a href="{% url 'account:signup' %}">회원가입</a></p>
+<div class="row justify-content-center">
+    <div class="col-md-5 col-lg-4">
+        <div class="card shadow border-0 mt-5">
+            <div class="card-body p-4 p-md-5">
+                <div class="text-center mb-4">
+                    <i class="fa-solid fa-wallet text-primary fs-1 mb-3"></i>
+                    <h3 class="fw-bold">PFM 로그인</h3>
+                    <p class="text-secondary small">나의 가계부 앱에 접속하세요.</p>
+                </div>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">{{ field.label }}</label>
+                        <input type="{{ field.field.widget.input_type|default:'text' }}" name="{{ field.name }}" class="form-control" placeholder="{{ field.label }}" required>
+                    </div>
+                    {% endfor %}
+                    
+                    <div class="form-check mb-4 mt-2">
+                        <input class="form-check-input" type="checkbox" name="remember_me" id="remember_me">
+                        <label class="form-check-label small" for="remember_me">
+                            자동 로그인 (2주간 유지)
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold py-2 shadow-sm">로그인</button>
+                </form>
+
+                <div class="mt-4 pt-3 border-top text-center small">
+                    <span class="text-secondary">계정이 없으신가요?</span>
+                    <a href="{% url 'account:signup' %}" class="text-decoration-none fw-bold ms-1">회원가입</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

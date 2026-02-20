@@ -1,161 +1,273 @@
 {% extends "account/base.html" %}
 {% load humanize %}
 
-{% block title %}새 거래 입력{% endblock %}
+{% block title %}거래 입력 - PFM{% endblock %}
 
 {% block extra_style %}
 <style>
-    .preset-section { margin-bottom: 1.5em; }
-    .preset-btn {
-        background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px;
-        padding: 5px 10px; margin: 2px; cursor: pointer; font-size: 0.9em;
+    .preset-pill {
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid transparent;
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 14px;
+        margin-right: 6px;
+        margin-bottom: 8px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        border-radius: 50px;
     }
-    .preset-btn:hover { background-color: #e0e0e0; }
-    .type-자산 { color: #d32be2; } .type-부채 { color: #007BA7; } .type-비용 { color: #A52A2A; }
-    .type-수익 { color: #89c91b; } .type-순자산 { color: #ffe600; }
-    form p, .form-check { line-height: 1.6; margin-bottom: 1em; }
-    .form-check-input { margin-right: 8px; }
+    /* 고정 항목 스타일 (날짜순) */
+    .pill-fixed {
+        background-color: var(--bs-primary-bg-subtle);
+        color: var(--bs-primary-text-emphasis);
+    }
+    .pill-fixed:hover {
+        background-color: var(--bs-primary);
+        color: white;
+        transform: translateY(-2px);
+    }
+    .pill-fixed .date-badge {
+        background-color: var(--bs-primary);
+        color: white;
+        padding: 1px 6px;
+        border-radius: 10px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        margin-right: 6px;
+    }
+    [data-bs-theme="dark"] .pill-fixed:hover .date-badge {
+        background-color: white;
+        color: var(--bs-primary);
+    }
 
-    .recent-transactions table { width:100%; border-collapse: collapse; margin-top: 1em; font-size: 0.9em; }
-    .recent-transactions th, .recent-transactions td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #ddd; }
-    .recent-transactions th { background-color: #f8f8f8; }
-    .recent-transactions td { vertical-align: middle; }
+    /* 자주 입력 항목 스타일 */
+    .pill-frequent {
+        background-color: var(--bs-warning-bg-subtle);
+        color: var(--bs-warning-text-emphasis);
+    }
+    .pill-frequent:hover {
+        background-color: var(--bs-warning);
+        color: var(--bs-dark);
+        transform: translateY(-2px);
+    }
+
+    .account-select optgroup {
+        font-weight: bold;
+        color: var(--bs-primary);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-    <h1>새 거래 입력</h1>
-    
-    {% if messages %}
-        <div class="messages" style="background-color: #d4edda; color: #155724; padding: 10px; margin-top: 10px; border-radius: 4px;">
-            {% for message in messages %}
-                {{ message }}
-            {% endfor %}
-        </div>
-    {% endif %}
-    
-    <hr>
+<div class="row g-4">
+    <!-- 왼쪽: 입력 폼 (이전과 동일) -->
+    <div class="col-lg-7">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-transparent border-0 pt-4 px-4">
+                <h4 class="fw-bold mb-0">새 거래 입력</h4>
+            </div>
+            <div class="card-body p-4">
+                <form method="post" id="transaction-form" class="needs-validation" novalidate>
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-secondary">날짜</label>
+                            <input type="date" name="date" id="date-input" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-secondary">금액</label>
+                            <div class="input-group">
+                                <input type="number" name="amount" id="amount-input" class="form-control form-control-lg fw-bold" placeholder="0" required>
+                                <span class="input-group-text">원</span>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-secondary">아이템</label>
+                            <input type="text" name="item" id="item-input" class="form-control" placeholder="무엇에 쓰셨나요? (할부는 '항목//개월수')" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-secondary">메모 (선택)</label>
+                            <input type="text" name="memo" id="memo-input" class="form-control" placeholder="상세 내용을 적어주세요.">
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-primary">차변 (받는 쪽 / 비용 +)</label>
+                            <select name="debit_account" id="debit-account-select" class="form-select account-select" required>
+                                <option value="">--- 항목 선택 ---</option>
+                                {% for type, accounts in debit_accounts.items %}
+                                    <optgroup label="{{ type }}">
+                                        {% for acc in accounts %}
+                                            <option value="{{ acc.id }}">
+                                                {% if acc.type == '자산' or acc.type == '비용' %}+{% else %}-{% endif %} {{ acc.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </optgroup>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-danger">대변 (주는 쪽 / 수익 -)</label>
+                            <select name="credit_account" id="credit-account-select" class="form-select account-select" required>
+                                <option value="">--- 항목 선택 ---</option>
+                                {% for type, accounts in credit_accounts.items %}
+                                    <optgroup label="{{ type }}">
+                                        {% for acc in accounts %}
+                                            <option value="{{ acc.id }}">
+                                                {% if acc.type == '부채' or acc.type == '수익' or acc.type == '순자산' %}+{% else %}-{% endif %} {{ acc.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </optgroup>
+                                {% endfor %}
+                            </select>
+                        </div>
 
-    <div class="preset-section">
-        <strong>고정 항목:</strong>
-        <div>
-            {% for preset in fixed_presets %}
-            <button type="button" class="preset-btn"
-                data-item="{{ preset.item }}" data-amount="{{ preset.amount|default:'' }}"
-                data-day="{{ preset.day_of_month }}" data-debit-id="{{ preset.debit_account_id }}"
-                data-credit-id="{{ preset.credit_account_id }}">
-                [{{ preset.day_of_month }}일] {{ preset.name }}
-            </button>
-            {% endfor %}
+                        <div class="col-12">
+                            <div class="form-check form-switch p-3 bg-body-tertiary rounded border">
+                                <input class="form-check-input ms-0 me-2" type="checkbox" name="is_repayment" id="id_is_repayment">
+                                <label class="form-check-label fw-medium" for="id_is_repayment">
+                                    부채 상환 거래 (가용 현금에서 제외)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-12 mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg w-100 py-3 fw-bold">
+                                <i class="fa-solid fa-check-circle me-2"></i>거래 저장하기
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
-    <div class="preset-section">
-        <strong>자주 입력:</strong>
-        <div>
-            {% for preset in frequent_presets %}
-            <button type="button" class="preset-btn"
-                data-item="{{ preset.item }}" data-amount="{{ preset.amount|default:'' }}"
-                data-debit-id="{{ preset.debit_account_id }}" data-credit-id="{{ preset.credit_account_id }}">{{ preset.name }}</button>
-            {% endfor %}
-        </div>
-    </div>
-    <hr>
 
-    <form method="post" id="transaction-form">
-        {% csrf_token %}
-        <p>날짜: <input type="date" name="date" id="date-input" value="{{ today|date:'Y-m-d' }}" required></p>
-        <p>아이템: <input type="text" name="item" id="item-input" required style="width: 300px;"></p>
-        <p>메모: <input type="text" name="memo" id="memo-input" style="width: 300px;"></p>
-        <p>금액: <input type="number" name="amount" id="amount-input" required></p>
-        <hr>
-        <p>
-            <select name="debit_account" id="debit-account-select" required>
-                <option value="">--- [차변] 항목 선택 ---</option>
-                {% for type, accounts in debit_accounts.items %}
-                    <optgroup label="{{ type }}">
-                        {% for acc in accounts %}
-                            <option value="{{ acc.id }}" class="type-{{ acc.type }}">
-                                {% if acc.type == '자산' or acc.type == '비용' %}+{% else %}-{% endif %}
-                                {{ acc.name }}
-                            </option>
-                        {% endfor %}
-                    </optgroup>
-                {% endfor %}
-            </select>
-        </p>
-        <p>
-            <select name="credit_account" id="credit-account-select" required>
-                <option value="">--- [대변] 항목 선택 ---</option>
-                {% for type, accounts in credit_accounts.items %}
-                    <optgroup label="{{ type }}">
-                        {% for acc in accounts %}
-                            <option value="{{ acc.id }}" class="type-{{ acc.type }}">
-                                {% if acc.type == '부채' or acc.type == '수익' or acc.type == '순자산' %}+{% else %}-{% endif %}
-                                {{ acc.name }}
-                            </option>
-                        {% endfor %}
-                    </optgroup>
-                {% endfor %}
-            </select>
-        </p>
-        
-        <div class="form-check">
-            <input type="checkbox" name="is_repayment" class="form-check-input" id="id_is_repayment">
-            <label class="form-check-label" for="id_is_repayment">
-                이 거래를 부채상환으로 처리합니다 (가용 현금 계산에서 제외)
-            </label>
-        </div>
-
-        <button type="submit" style="padding: 10px 20px; margin-top: 10px;">저장하기</button>
-    </form>
-
-    <div class="recent-transactions" style="margin-top: 3em;">
-        <h2>최근 입력 내역</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>날짜</th><th>아이템</th><th style="text-align: right;">금액</th><th>차변</th><th>대변</th><th>관리</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for tx in recent_transactions %}
-                <tr>
-                    <td>{{ tx.date|date:"y-m-d" }}</td>
-                    <td>{{ tx.item }}</td>
-                    <td style="text-align: right;">{{ tx.amount|intcomma }}</td>
-                    <td>{{ tx.debit_account.name }}</td>
-                    <td>{{ tx.credit_account.name }}</td>
-                    <td>
-                        <a href="{% url 'account:transaction_update' tx.pk %}?next={{ request.path }}">수정</a>
-                        <form action="{% url 'account:transaction_delete' tx.pk %}?next={{ request.path }}" method="post" style="display: inline;">
-                            {% csrf_token %}
-                            <button type="submit" onclick="return confirm('정말 이 거래를 삭제하시겠습니까?');" style="padding: 2px 5px; font-size: 0.8em;">삭제</button>
-                        </form>
-                    </td>
-                </tr>
+    <!-- 오른쪽: 프리셋 및 최근 내역 -->
+    <div class="col-lg-5">
+        <!-- 고정 항목 섹션 -->
+        <div class="mb-4">
+            <h5 class="fw-bold mb-3 small text-secondary"><i class="fa-solid fa-calendar-check text-primary me-2"></i>고정 지출 (날짜순)</h5>
+            <div class="d-flex flex-wrap">
+                {% for preset in fixed_presets %}
+                <div class="preset-pill pill-fixed shadow-sm preset-btn"
+                     data-item="{{ preset.item }}" data-amount="{{ preset.amount|default:'' }}"
+                     data-day="{{ preset.day_of_month }}" data-debit-id="{{ preset.debit_account_id }}"
+                     data-credit-id="{{ preset.credit_account_id }}">
+                    <span class="date-badge">{{ preset.day_of_month }}일</span>
+                    {{ preset.name }}
+                </div>
                 {% empty %}
-                <tr><td colspan="6" style="text-align: center;">최근 내역이 없습니다.</td></tr>
+                <p class="small text-secondary opacity-50 ps-2">등록된 고정 항목이 없습니다.</p>
                 {% endfor %}
-            </tbody>
-        </table>
-    </div>
+            </div>
+        </div>
 
-    <script>
-    document.querySelectorAll('.preset-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            const data = this.dataset;
-            document.getElementById('item-input').value = data.item || '';
-            document.getElementById('amount-input').value = data.amount || '';
-            document.getElementById('debit-account-select').value = data.debitId || '';
-            document.getElementById('credit-account-select').value = data.creditId || '';
-            if (data.day) {
-                const today = new Date();
-                const year = today.getFullYear();
-                const month = String(today.getMonth() + 1).padStart(2, '0');
-                const day = String(data.day).padStart(2, '0');
-                document.getElementById('date-input').value = `${year}-${month}-${day}`;
-            }
-        });
+        <!-- 자주 입력 섹션 -->
+        <div class="mb-5">
+            <h5 class="fw-bold mb-3 small text-secondary"><i class="fa-solid fa-star text-warning me-2"></i>자주 입력 항목</h5>
+            <div class="d-flex flex-wrap">
+                {% for preset in frequent_presets %}
+                <div class="preset-pill pill-frequent shadow-sm preset-btn"
+                     data-item="{{ preset.item }}" data-amount="{{ preset.amount|default:'' }}"
+                     data-debit-id="{{ preset.debit_account_id }}" data-credit-id="{{ preset.credit_account_id }}">
+                    {{ preset.name }}
+                </div>
+                {% empty %}
+                <p class="small text-secondary opacity-50 ps-2">등록된 자주 입력 항목이 없습니다.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- 최근 내역 요약 -->
+        <div class="card shadow-sm border-0 bg-body-tertiary">
+            <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0">최근 입력</h5>
+                <a href="{% url 'account:transaction_list' %}" class="btn btn-link btn-sm p-0 text-decoration-none">전체보기</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for tx in recent_transactions %}
+                    <div class="list-group-item bg-transparent px-4 py-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="fw-bold">{{ tx.item }}</div>
+                                <div class="small text-body-secondary fw-medium">{{ tx.date|date:"m/d" }} · {{ tx.debit_account.name }} ↔ {{ tx.credit_account.name }}</div>
+                            </div>
+                            <div class="text-end">
+                                <div class="fw-bold text-primary">{{ tx.amount|intcomma }}원</div>
+                                <div class="d-flex gap-2 mt-1">
+                                    <a href="{% url 'account:transaction_update' tx.pk %}?next={{ request.path }}" class="btn btn-outline-secondary btn-xs py-0 px-1" style="font-size: 0.7rem;">수정</a>
+                                    <form action="{% url 'account:transaction_delete' tx.pk %}?next={{ request.path }}" method="post" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-outline-danger btn-xs py-0 px-1" style="font-size: 0.7rem;" onclick="return confirm('삭제할까요?');">삭제</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="p-4 text-center text-secondary">최근 내역이 없습니다.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_script %}
+<script>
+document.querySelectorAll('.preset-btn').forEach(button => {
+    button.addEventListener('click', function() {
+        const data = this.dataset;
+        document.getElementById('item-input').value = data.item || '';
+        document.getElementById('amount-input').value = data.amount || '';
+        
+        // Tom Select 대응: 일반 value 변경 대신 tomselect 인스턴스의 setValue 사용
+        const debitSelect = document.getElementById('debit-account-select');
+        const creditSelect = document.getElementById('credit-account-select');
+
+        if (debitSelect.tomselect) {
+            debitSelect.tomselect.setValue(data.debitId || '');
+        } else {
+            debitSelect.value = data.debitId || '';
+        }
+
+        if (creditSelect.tomselect) {
+            creditSelect.tomselect.setValue(data.creditId || '');
+        } else {
+            creditSelect.value = data.creditId || '';
+        }
+        
+        if (data.day) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(data.day).padStart(2, '0');
+            document.getElementById('date-input').value = `${year}-${month}-${day}`;
+        }
+        
+        // 시각적 피드백
+        this.classList.add('bg-primary-subtle');
+        setTimeout(() => this.classList.remove('bg-primary-subtle'), 300);
     });
-    </script>
+});
+
+// Bootstrap validation
+(() => {
+  'use strict'
+  const forms = document.querySelectorAll('.needs-validation')
+  Array.from(forms).forEach(form => {
+    form.addEventListener('submit', event => {
+      if (!form.checkValidity()) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+      form.classList.add('was-validated')
+    }, false)
+  })
+})()
+</script>
 {% endblock %}

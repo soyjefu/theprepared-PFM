@@ -14,8 +14,8 @@ class TransactionForm(forms.ModelForm):
         user = kwargs.pop('user', None)
         super(TransactionForm, self).__init__(*args, **kwargs)
         if user:
-            self.fields['debit_account'].queryset = Account.objects.filter(owner=user)
-            self.fields['credit_account'].queryset = Account.objects.filter(owner=user)
+            self.fields['debit_account'].queryset = Account.objects.filter(owner=user, is_active=True)
+            self.fields['credit_account'].queryset = Account.objects.filter(owner=user, is_active=True)
 
     class Meta:
         model = Transaction
@@ -67,14 +67,16 @@ class AccountForm(forms.ModelForm):
 
     class Meta:
         model = Account
-        fields = ['type', 'name', 'category']
+        fields = ['type', 'name', 'category', 'is_active']
         labels = {
             'name': '항목명',
             'category': '계정 유형',
+            'is_active': '활성 상태',
         }
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
     def clean(self):
@@ -110,8 +112,8 @@ class TransactionPresetForm(forms.ModelForm):
             'preset_type': '프리셋 타입',
             'item': '아이템',
             'amount': '금액',
-            'debit_account': '차변 계정',
-            'credit_account': '대변 계정',
+            'debit_account': '차변 계정 (+)',
+            'credit_account': '대변 계정 (-)',
             'day_of_month': '고정 일자 (고정항목 시)',
         }
         widgets = {
@@ -125,8 +127,8 @@ class TransactionPresetForm(forms.ModelForm):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         if user:
-            self.fields['debit_account'].queryset = Account.objects.filter(owner=user)
-            self.fields['credit_account'].queryset = Account.objects.filter(owner=user)
+            self.fields['debit_account'].queryset = Account.objects.filter(owner=user, is_active=True)
+            self.fields['credit_account'].queryset = Account.objects.filter(owner=user, is_active=True)
         
         if self.instance and self.instance.preset_type == 'FREQUENT':
             self.fields['amount'].required = False
@@ -166,4 +168,4 @@ class BudgetForm(forms.ModelForm):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         if user:
-            self.fields['account'].queryset = Account.objects.filter(owner=user, type='비용')
+            self.fields['account'].queryset = Account.objects.filter(owner=user, type='비용', is_active=True)
