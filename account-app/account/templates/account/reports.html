@@ -70,6 +70,22 @@
             </div>
         </div>
     </div>
+    <!-- 남은 예산 요약 -->
+    <div class="col-md-12">
+        <div class="card shadow-sm border-0 {% if remaining_budget < 0 %}bg-danger-subtle{% else %}bg-success-subtle{% endif %}">
+            <div class="card-body d-flex justify-content-between align-items-center p-3 px-4">
+                <div class="d-flex align-items-center">
+                    <i class="fa-solid {% if remaining_budget < 0 %}fa-triangle-exclamation text-danger{% else %}fa-check-circle text-success{% endif %} fs-4 me-3"></i>
+                    <h5 class="mb-0 fw-bold {% if remaining_budget < 0 %}text-danger{% else %}text-success{% endif %}">
+                        {% if remaining_budget < 0 %}예산 초과!{% else %}남은 예산 (여유자금){% endif %}
+                    </h5>
+                </div>
+                <h4 class="mb-0 fw-bold {% if remaining_budget < 0 %}text-danger{% else %}text-success{% endif %}">
+                    {{ remaining_budget|intcomma }}원
+                </h4>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row g-4">
@@ -101,6 +117,17 @@
             </div>
         </div>
 
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-transparent border-0 pt-4 px-4 text-center">
+                <h5 class="fw-bold mb-0">카테고리별 지출 비율</h5>
+            </div>
+            <div class="card-body p-4 text-center">
+                <div class="chart-container">
+                    <canvas id="spendingPieChart"></canvas>
+                </div>
+            </div>
+        </div>
+
         <div class="card shadow-sm">
             <div class="card-header bg-transparent border-0 pt-4 px-4">
                 <h5 class="fw-bold mb-0">고정 지출 상세</h5>
@@ -126,12 +153,12 @@
     <!-- 오른쪽: 지출 분석 및 예산 대비 현황 -->
     <div class="col-lg-7">
         <div class="card shadow-sm mb-4">
-            <div class="card-header bg-transparent border-0 pt-4 px-4 text-center">
-                <h5 class="fw-bold mb-0">카테고리별 지출 비율</h5>
+            <div class="card-header bg-transparent border-0 pt-4 px-4">
+                <h5 class="fw-bold mb-0">항목별 예산 vs 실지출</h5>
             </div>
-            <div class="card-body p-4 text-center">
-                <div style="height: 300px; max-width: 400px; margin: 0 auto;">
-                    <canvas id="spendingPieChart"></canvas>
+            <div class="card-body p-4">
+                <div class="chart-container">
+                    <canvas id="budgetCompareChart"></canvas>
                 </div>
             </div>
         </div>
@@ -208,6 +235,57 @@
                 legend: {
                     position: 'bottom',
                     labels: { color: textColor, padding: 20, font: { size: 12 } }
+                }
+            }
+        }
+    });
+
+    // --- 예산 대비 실지출 비교 차트 (막대형) ---
+    const budgetChartData = JSON.parse('{{ budget_chart_json|safe }}');
+    new Chart(document.getElementById('budgetCompareChart'), {
+        type: 'bar',
+        data: {
+            labels: budgetChartData.labels,
+            datasets: [
+                {
+                    label: '예산',
+                    data: budgetChartData.budget,
+                    backgroundColor: 'rgba(108, 117, 125, 0.5)',
+                    borderColor: 'rgb(108, 117, 125)',
+                    borderWidth: 1
+                },
+                {
+                    label: '실지출',
+                    data: budgetChartData.spent,
+                    backgroundColor: '#0dcaf0',
+                    borderColor: '#0dcaf0',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: textColor }
+                },
+                x: {
+                    ticks: { color: textColor }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { color: textColor }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toLocaleString() + '원';
+                        }
+                    }
                 }
             }
         }

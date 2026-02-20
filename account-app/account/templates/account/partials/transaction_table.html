@@ -1,0 +1,93 @@
+{% load humanize %}
+{% load account_extras %}
+
+<!-- 요약 정보 (OOB 제거, 이제 부모 컨테이너의 일부로 작동) -->
+<div id="transaction-summary-container">
+    <div class="row mb-4 g-3">
+        <div class="col-md-{% if selected_account_name %}6{% else %}12{% endif %}">
+            <div class="card border-0 shadow-sm bg-primary text-white">
+                <div class="card-body p-3 d-flex justify-content-between align-items-center">
+                    <span class="fw-bold">{% if selected_account_name %}[ {{ selected_account_name }} ] {% endif %}검색 결과 합계</span>
+                    <span class="fs-4 fw-bold">{{ period_total|intcomma }}원</span>
+                </div>
+            </div>
+        </div>
+        {% if selected_account_name %}
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm bg-success text-white">
+                <div class="card-body p-3 d-flex justify-content-between align-items-center">
+                    <span class="fw-bold">누적 잔액 ({{ filters.end_date }} 기준)</span>
+                    <span class="fs-4 fw-bold">{{ cumulative_total|intcomma }}원</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 내역 테이블 카드 -->
+<div class="card shadow-sm border-0">
+    <div class="table-container" id="transaction-table-container">
+        <table class="table table-hover align-middle mb-0 table-mobile-cards">
+            <thead class="table-light text-secondary small">
+                <tr>
+                    <th class="ps-4">날짜</th>
+                    <th>항목 / 메모</th>
+                    <th class="text-end" style="width: 140px;">금액</th>
+                    <th>차변 (+)</th>
+                    <th>대변 (-)</th>
+                    {% if cumulative_total is not None %}
+                    <th class="text-end">잔액</th>
+                    {% endif %}
+                    <th class="text-center pe-4">관리</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tx in transactions %}
+                <tr class="transaction-row">
+                    <!-- 모바일 최적화: 날짜와 항목을 헤더처럼 배치 -->
+                    <td class="small" data-label="날짜">{{ tx.date|date:"Y-m-d" }}</td>
+                    <td data-label="항목 / 메모">
+                        <span class="item-name">{% include "account/partials/inline_field.html" with tx=tx field="item" %}</span>
+                        <span class="item-memo">{% include "account/partials/inline_field.html" with tx=tx field="memo" %}</span>
+                    </td>
+                    <td class="text-end" data-label="금액">
+                        {% include "account/partials/inline_field.html" with tx=tx field="amount" %}
+                    </td>
+                    <td data-label="차변 (+)">
+                        {% include "account/partials/inline_field.html" with tx=tx field="debit_account" %}
+                    </td>
+                    <td data-label="대변 (-)">
+                        {% include "account/partials/inline_field.html" with tx=tx field="credit_account" %}
+                    </td>
+                    {% if cumulative_total is not None %}
+                    <td class="text-end" data-label="잔액">
+                        <span class="fw-bold">{% if tx.balance is not None %}{{ tx.balance|intcomma }}{% endif %}</span>
+                    </td>
+                    {% endif %}
+                    <td class="text-center" data-label="관리">
+                        <div class="btn-group btn-group-sm w-100">
+                            <a href="{% url 'account:transaction_update' tx.pk %}?next={{ request.get_full_path|urlencode }}" class="btn btn-light border py-2">
+                                <i class="fa-solid fa-pen me-1 opacity-75"></i>수정
+                            </a>
+                            <form action="{% url 'account:transaction_delete' tx.pk %}?next={{ request.get_full_path|urlencode }}" method="post" class="d-inline flex-grow-1">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-danger py-2 w-100" onclick="return confirm('삭제할까요?');">
+                                    <i class="fa-solid fa-trash me-1"></i>삭제
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if cumulative_total is not None %}7{% else %}6{% endif %}" class="text-center py-5 text-secondary">
+                        <i class="fa-solid fa-folder-open fs-2 mb-3 d-block opacity-25"></i>
+                        해당 조건의 거래 내역이 없습니다.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

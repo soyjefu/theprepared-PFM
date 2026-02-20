@@ -104,7 +104,7 @@
         <h5 class="fw-bold mb-0">월별 순자산 추이</h5>
     </div>
     <div class="card-body p-4">
-        <div style="height: 300px;">
+        <div class="chart-container">
             <canvas id="netWorthChart"></canvas>
         </div>
     </div>
@@ -221,6 +221,10 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const chartData = JSON.parse(chartDataJson);
             if (chartData.labels && chartData.labels.length > 0) {
+                const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+                gradient.addColorStop(0, 'rgba(13, 110, 253, 0.2)');
+                gradient.addColorStop(1, 'rgba(13, 110, 253, 0.0)');
+
                 new Chart(ctx, {
                     type: 'line',
                     data: {
@@ -229,23 +233,36 @@ document.addEventListener('DOMContentLoaded', function() {
                             label: '월말 순자산',
                             data: chartData.net_worth_data,
                             borderColor: '#0d6efd',
-                            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                            borderWidth: 3,
+                            backgroundColor: gradient,
                             fill: true,
-                            tension: 0.3,
+                            tension: 0.4,
                             pointRadius: 4,
-                            pointBackgroundColor: '#0d6efd'
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: '#0d6efd',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        interaction: {
+                            intersect: false,
+                            mode: 'index',
+                        },
                         scales: {
                             y: {
-                                grid: { color: gridColor },
+                                grid: { 
+                                    color: gridColor,
+                                    drawBorder: false
+                                },
                                 ticks: {
                                     color: textColor,
                                     callback: function(value) {
-                                        return (value / 10000).toLocaleString() + '만';
+                                        if (value >= 100000000) return (value / 100000000).toFixed(1) + '억';
+                                        if (value >= 10000) return (value / 10000).toLocaleString() + '만';
+                                        return value.toLocaleString();
                                     }
                                 }
                             },
@@ -266,7 +283,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 displayColors: false,
                                 callbacks: {
                                     label: function(context) {
-                                        return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(context.parsed.y);
+                                        return ' 순자산: ' + new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(context.parsed.y);
                                     }
                                 }
                             }

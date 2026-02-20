@@ -1,0 +1,32 @@
+<form hx-post="{% url 'account:transaction_inline_update' tx.pk %}?field={{ field }}" 
+      hx-target="this" 
+      hx-swap="outerHTML" 
+      class="d-flex gap-1 align-items-center {% if field == 'amount' %}justify-content-end{% endif %}">
+    {% csrf_token %}
+    
+    {% if field == 'debit_account' or field == 'credit_account' %}
+        <select name="{{ field }}" class="form-select form-select-sm" autofocus 
+                style="min-width: 120px;"
+                onchange="this.form.dispatchEvent(new Event('submit', {cancelable: true}))"
+                onblur="this.form.dispatchEvent(new Event('submit', {cancelable: true}))">
+            {% for type, accounts in accounts_grouped.items %}
+                <optgroup label="{{ type }}">
+                    {% for acc in accounts %}
+                        <option value="{{ acc.id }}" {% if acc.id == selected_id %}selected{% endif %}>
+                            {% if acc.type == '자산' or acc.type == '비용' %}+{% else %}-{% endif %} {{ acc.name }}
+                        </option>
+                    {% endfor %}
+                </optgroup>
+            {% endfor %}
+        </select>
+    {% else %}
+        <input type="{% if field == 'amount' %}number{% else %}text{% endif %}" 
+               name="{{ field }}" 
+               class="form-control form-control-sm {% if field == 'amount' %}text-end fw-bold{% endif %}" 
+               value="{{ value|floatformat:0|default:value }}" 
+               autofocus 
+               onfocus="this.select()"
+               onblur="this.form.dispatchEvent(new Event('submit', {cancelable: true}))"
+               style="{% if field == 'amount' %}max-width: 120px;{% endif %}">
+    {% endif %}
+</form>

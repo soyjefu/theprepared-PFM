@@ -146,7 +146,7 @@ def transaction_list(request):
         except Account.DoesNotExist:
             pass
 
-    all_accounts = Account.objects.filter(owner=request.user, is_active=True)
+    all_accounts = Account.objects.filter(owner=request.user).order_by('type', 'name')
     years = range(2020, today.year + 2)
     months = range(1, 13)
     
@@ -170,6 +170,10 @@ def transaction_list(request):
             'month': int(q_month) if q_month else start_date_obj.month,
         }
     }
+    
+    if request.headers.get('HX-Request'):
+        return render(request, 'account/partials/transaction_table.html', context)
+        
     return render(request, 'account/transaction_list.html', context)
 
 @login_required
@@ -271,10 +275,15 @@ def transaction_update(request, pk):
     
     debit_accounts = {}
     credit_accounts = {}
-    for acc in Account.objects.filter(owner=request.user, is_active=True).exclude(type='수익').order_by('name'):
+    
+    # 활성 계정 + 현재 선택된 계정(비활성이어도 포함)
+    d_q = Q(is_active=True) | Q(id=transaction.debit_account_id)
+    c_q = Q(is_active=True) | Q(id=transaction.credit_account_id)
+
+    for acc in Account.objects.filter(owner=request.user).filter(d_q).exclude(type='수익').order_by('name'):
         if acc.type not in debit_accounts: debit_accounts[acc.type] = []
         debit_accounts[acc.type].append(acc)
-    for acc in Account.objects.filter(owner=request.user, is_active=True).exclude(type='비용').order_by('name'):
+    for acc in Account.objects.filter(owner=request.user).filter(c_q).exclude(type='비용').order_by('name'):
         if acc.type not in credit_accounts: credit_accounts[acc.type] = []
         credit_accounts[acc.type].append(acc)
     
@@ -283,6 +292,53 @@ def transaction_update(request, pk):
         'debit_accounts': debit_accounts, 'credit_accounts': credit_accounts,
     }
     return render(request, 'account/transaction_update_form.html', context)
+
+@login_required
+def transaction_inline_update(request, pk):
+    transaction = get_object_or_404(Transaction, pk=pk, owner=request.user)
+    field = request.GET.get('field')
+    
+    if request.method == 'POST':
+        value = request.POST.get(field)
+        if field == 'amount':
+            try:
+                transaction.amount = Decimal(value.replace(',', ''))
+            except (ValueError, TypeError, Decimal.InvalidOperation):
+                pass
+        elif field in ['debit_account', 'credit_account']:
+            acc = get_object_or_404(Account, id=value, owner=request.user)
+            setattr(transaction, field, acc)
+        else:
+            setattr(transaction, field, value)
+        transaction.save()
+        
+        context = {'tx': transaction, 'field': field}
+        return render(request, 'account/partials/inline_field.html', context)
+
+    # 수정용 입력 폼 리턴
+    value = getattr(transaction, field)
+    context = {'tx': transaction, 'field': field, 'value': value}
+    
+    if field in ['debit_account', 'credit_account']:
+        # 계정 선택을 위한 그룹화된 목록 준비
+        accounts_grouped = {}
+        exclude_type = '수익' if field == 'debit_account' else '비용'
+        
+        # 활성 계정 + 현재 선택된 계정(비활성이어도 포함)
+        current_acc_id = getattr(transaction, field).id if getattr(transaction, field) else None
+        q_filter = Q(is_active=True)
+        if current_acc_id:
+            q_filter |= Q(id=current_acc_id)
+            
+        relevant_accounts = Account.objects.filter(owner=request.user).filter(q_filter).order_by('type', 'name')
+        
+        for acc in relevant_accounts.exclude(type=exclude_type):
+            if acc.type not in accounts_grouped: accounts_grouped[acc.type] = []
+            accounts_grouped[acc.type].append(acc)
+        context['accounts_grouped'] = accounts_grouped
+        context['selected_id'] = value.id if value else None
+
+    return render(request, 'account/partials/inline_form.html', context)
 
 @login_required
 def transaction_delete(request, pk):
@@ -395,58 +451,54 @@ def asset_status(request):
                        ), 'months': range(1, 13),
     }
 
+    # --- 기간 설정: 최근 1년 (현재 월 포함) ---
+    today = date.today()
+    end_date = today 
+    start_date = (today - relativedelta(months=11)).replace(day=1)
+
     chart_data = {
         'labels': [],
         'net_worth_data': [],
     }
 
-    # --- 기간 설정 로직 수정: 최근 1년 (현재 월 포함) ---
-    today = date.today()
-    # 루프 종료일은 이번 달의 오늘 날짜
-    end_date = today 
-    # 루프 시작일은 11개월 전의 1일 (오늘이 8월이면 작년 9월 1일부터 시작)
-    start_date = (today - relativedelta(months=11)).replace(day=1)
+    # 1. 시작일(start_date) 이전의 누적 순자산 계산 (기초 잔액)
+    initial_assets = Transaction.objects.filter(
+        owner=request.user, date__lt=start_date
+    ).aggregate(
+        diff=Sum('amount', filter=Q(debit_account__type='자산')) - Sum('amount', filter=Q(credit_account__type='자산'))
+    )
+    initial_liabilities = Transaction.objects.filter(
+        owner=request.user, date__lt=start_date
+    ).aggregate(
+        diff=Sum('amount', filter=Q(credit_account__type='부채')) - Sum('amount', filter=Q(debit_account__type='부채'))
+    )
+    
+    current_net_worth_accum = (initial_assets['diff'] or Decimal(0)) - (initial_liabilities['diff'] or Decimal(0))
 
-    # 설정된 기간 내에 거래가 있는 경우에만 차트 데이터 생성
-    if Transaction.objects.filter(owner=request.user, date__gte=start_date).exists():
-        current_date = start_date
+    # 2. 월별 변동분 계산 (성능을 위해 기간 내 거래만 가져옴)
+    monthly_changes = Transaction.objects.filter(
+        owner=request.user, date__range=[start_date, end_date]
+    ).values('date__year', 'date__month').annotate(
+        asset_diff=Sum('amount', filter=Q(debit_account__type='자산')) - Sum('amount', filter=Q(credit_account__type='자산')),
+        liab_diff=Sum('amount', filter=Q(credit_account__type='부채')) - Sum('amount', filter=Q(debit_account__type='부채'))
+    ).order_by('date__year', 'date__month')
+
+    changes_dict = {(item['date__year'], item['date__month']): (item['asset_diff'] or Decimal(0), item['liab_diff'] or Decimal(0)) 
+                    for item in monthly_changes}
+
+    # 3. 월별 라벨 및 누적 순자산 데이터 생성
+    temp_date = start_date
+    while temp_date <= end_date:
+        year_month = (temp_date.year, temp_date.month)
+        asset_change, liab_change = changes_dict.get(year_month, (Decimal(0), Decimal(0)))
         
-        # start_date부터 end_date까지 월별로 순회
-        while current_date <= end_date:
-            # 해당 월의 마지막 날짜 계산
-            month_end_date = current_date + relativedelta(months=1) - relativedelta(days=1)
-            # 단, 루프의 마지막 달에는 오늘 날짜를 기준으로 계산
-            if current_date.year == end_date.year and current_date.month == end_date.month:
-                month_end_date = end_date
+        current_net_worth_accum += (asset_change - liab_change)
+        
+        chart_data['labels'].append(temp_date.strftime('%Y-%m'))
+        chart_data['net_worth_data'].append(float(current_net_worth_accum))
+        temp_date += relativedelta(months=1)
 
-            # 해당 월말까지의 자산/부채 계산
-            asset_accounts = Account.objects.filter(owner=request.user, type='자산')
-            liabilities_accounts = Account.objects.filter(owner=request.user, type='부채')
-
-            total_assets_at_month_end = 0
-            for acc in asset_accounts:
-                debits = Transaction.objects.filter(owner=request.user, debit_account=acc, date__lte=month_end_date).aggregate(sum=Coalesce(Sum('amount'), Decimal(0)))['sum']
-                credits = Transaction.objects.filter(owner=request.user, credit_account=acc, date__lte=month_end_date).aggregate(sum=Coalesce(Sum('amount'), Decimal(0)))['sum']
-                total_assets_at_month_end += debits - credits
-
-            total_liabilities_at_month_end = 0
-            for acc in liabilities_accounts:
-                debits = Transaction.objects.filter(owner=request.user, debit_account=acc, date__lte=month_end_date).aggregate(sum=Coalesce(Sum('amount'), Decimal(0)))['sum']
-                credits = Transaction.objects.filter(owner=request.user, credit_account=acc, date__lte=month_end_date).aggregate(sum=Coalesce(Sum('amount'), Decimal(0)))['sum']
-                total_liabilities_at_month_end += credits - debits
-
-            net_worth_at_month_end = total_assets_at_month_end - total_liabilities_at_month_end
-            
-            chart_data['labels'].append(current_date.strftime('%Y-%m'))
-            chart_data['net_worth_data'].append(float(net_worth_at_month_end))
-            
-            # 다음 달로 이동
-            current_date += relativedelta(months=1)
-
-    # context에 chart_data_json 추가 (이 부분은 그대로 유지)
     context['chart_data_json'] = json.dumps(chart_data)
-    # --- ▲▲▲▲▲ 여기까지 코드 추가 ▲▲▲▲▲ ---
-
 
     return render(request, 'account/asset_status.html', context)
 
@@ -740,22 +792,34 @@ def reports_view(request):
     fixed_expenses_total = sum(item['total_spent'] for item in fixed_expense_details)
     for item in fixed_expense_details:
         item['percentage'] = int((item['total_spent'] / fixed_expenses_total) * 100) if fixed_expenses_total > 0 else 0
-    fixed_expense_details.sort(key=lambda x: x['total_spent'], reverse=True)
+        fixed_expense_details.sort(key=lambda x: x['total_spent'], reverse=True)
 
     # --- 전체 리포트 데이터 만들기 (이전과 동일) ---
     report_data = []
+    chart_labels = []
+    chart_budget_data = []
+    chart_spent_data = []
+
     for account in all_expense_accounts:
         account_name = account.name
         spent = spending_dict.get(account_name, Decimal(0))
         budget = budget_dict.get(account_name, Decimal(0))
         usage_percent = int((spent / budget * 100)) if budget > 0 else 0
+        
         report_data.append({
             'name': account_name, 'spent': spent, 'budget': budget, 'usage_percent': usage_percent,
         })
+        
+        # 차트용 데이터 (지출이나 예산이 있는 항목만)
+        if spent > 0 or budget > 0:
+            chart_labels.append(account_name)
+            chart_budget_data.append(float(budget))
+            chart_spent_data.append(float(spent))
 
-    # --- 월별 예산 합계 계산 (추가된 부분) ---
+    # --- 월별 예산 합계 계산 ---
     total_budget = sum(budget_dict.values())
     total_spent = sum(spending_dict.values())
+    remaining_budget = total_budget - total_spent
     
     context = {
         'year': year,
@@ -763,10 +827,18 @@ def reports_view(request):
         'report_data': report_data,
         'fixed_expenses_total': fixed_expenses_total,
         'fixed_expense_details': fixed_expense_details,
-        'total_budget': total_budget,  # <-- 템플릿에 전달할 예산 합계
+        'total_budget': total_budget,
         'total_spent': total_spent,
+        'remaining_budget': remaining_budget,
         'years': range(today.year - 3, today.year + 2),
         'months': range(1, 13),
         'form': form,
+        'budget_chart_json': json.dumps({
+            'labels': chart_labels,
+            'budget': chart_budget_data,
+            'spent': chart_spent_data,
+        })
     }
     return render(request, 'account/reports.html', context)
+
+    

@@ -16,6 +16,7 @@ urlpatterns = [
     path('transaction/new/', views.transaction_create, name='transaction_create'), # 거래입력을 첫 번째로
     path('list/', views.transaction_list, name='transaction_list'),
     path('transaction/<int:pk>/update/', views.transaction_update, name='transaction_update'),
+    path('transaction/<int:pk>/inline-update/', views.transaction_inline_update, name='transaction_inline_update'),
     path('transaction/<int:pk>/delete/', views.transaction_delete, name='transaction_delete'),
     path('status/', views.asset_status, name='asset_status'),
     path('budget/', views.budget_view, name='budget_view'),

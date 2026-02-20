@@ -12,6 +12,8 @@
     <!-- Tom Select (Searchable Dropdowns) -->
     <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+    <!-- HTMX (Partial Page Updates) -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -37,6 +39,12 @@
         }
         [data-bs-theme="dark"] .card {
             box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.5);
+        }
+        /* 공통 차트 컨테이너 */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
         }
         /* 다크모드 가독성 개선 */
         [data-bs-theme="dark"] .text-secondary {
@@ -74,13 +82,113 @@
         [data-bs-theme="dark"] .ts-dropdown .option {
             color: #dee2e6 !important;
         }
+        .nav-link {
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
         .nav-link.active {
             font-weight: 700;
             color: var(--bs-primary) !important;
         }
         /* Mobile optimization */
         @media (max-width: 768px) {
-            .container { padding-left: 10px; padding-right: 10px; }
+            .main-container { padding-top: 1rem; padding-bottom: 2rem; }
+            .navbar-brand { font-size: 1.1rem; }
+            .btn-xs { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+            .card-body { padding: 1.25rem !important; }
+            h2, h4 { font-size: 1.25rem; }
+            .chart-container { height: 250px; }
+            /* 모바일에서 버튼 간격 확보 */
+            .d-flex.gap-2 { gap: 0.5rem !important; }
+            .dropdown-menu { border: none; box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15); }
+        }
+        /* 유틸리티 */
+        .btn-xs { padding: 0.2rem 0.4rem; font-size: 0.7rem; border-radius: 4px; }
+        .min-w-0 { min-width: 0; }
+
+        /* Responsive Table to Cards (Compact & No-Overlap) */
+        @media (max-width: 768px) {
+            .table-mobile-cards thead { display: none; }
+            .table-mobile-cards, .table-mobile-cards tbody, .table-mobile-cards tr, .table-mobile-cards td { display: block; width: 100%; }
+            .table-mobile-cards tr { 
+                margin-bottom: 0.75rem; 
+                border: 1px solid var(--bs-border-color-translucent); 
+                border-radius: 12px; 
+                padding: 0.7rem 1rem;
+                background-color: var(--bs-body-bg);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+                position: relative;
+                overflow: hidden;
+            }
+            .table-mobile-cards td { 
+                text-align: left !important; 
+                padding: 0.2rem 0 !important; 
+                border: none !important;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 0.85rem;
+            }
+            /* 레이블 스타일 */
+            .table-mobile-cards td::before { 
+                content: attr(data-label); 
+                font-weight: 600; 
+                color: var(--bs-secondary);
+                font-size: 0.7rem;
+                opacity: 0.6;
+                margin-right: 0.5rem;
+            }
+            
+            /* 날짜 영역 */
+            .table-mobile-cards td[data-label="날짜"] { 
+                font-size: 0.7rem; color: var(--bs-secondary); 
+                margin-bottom: 0.1rem; width: fit-content;
+            }
+            .table-mobile-cards td[data-label="날짜"]::before { content: ""; margin: 0; }
+            
+            /* 금액 영역 (우측 상단 고정, 겹침 방지를 위해 td 자체가 아닌 내부 요소처럼 취급) */
+            .table-mobile-cards td[data-label="금액"] { 
+                position: absolute; top: 0.7rem; right: 1rem; width: auto; 
+                font-size: 1rem; font-weight: 800; color: var(--bs-primary) !important;
+                z-index: 2;
+            }
+            .table-mobile-cards td[data-label="금액"]::before { content: ""; margin: 0; }
+
+            /* 항목 / 메모 영역 (금액과 겹치지 않도록 우측 여백 확보) */
+            .table-mobile-cards td[data-label="항목 / 메모"] { 
+                display: block !important; /* 레이블 없이 전체 너비 사용 */
+                padding-right: 90px !important; /* 금액과 겹치지 않게 공간 확보 */
+                margin-bottom: 0.4rem;
+            }
+            .table-mobile-cards td[data-label="항목 / 메모"]::before { content: ""; margin: 0; }
+            .table-mobile-cards .item-name { font-size: 0.95rem; font-weight: 700; display: block; line-height: 1.3; }
+            .table-mobile-cards .item-memo { font-size: 0.75rem; color: var(--bs-secondary); display: block; margin-top: 0.1rem; }
+
+            /* 구분선 및 하단 정보 */
+            .table-mobile-cards td[data-label^="차변"], 
+            .table-mobile-cards td[data-label^="대변"] {
+                border-top: 1px solid var(--bs-border-color-translucent) !important;
+                padding-top: 0.35rem !important;
+                margin-top: 0.1rem;
+            }
+            .table-mobile-cards td[data-label="잔액"] { 
+                font-size: 0.75rem; color: var(--bs-secondary);
+                border-top: none !important;
+                margin-top: -0.1rem;
+            }
+
+            /* 버튼 영역 */
+            .table-mobile-cards td[data-label="관리"] { 
+                margin-top: 0.5rem; 
+                padding-top: 0.5rem !important; 
+                border-top: 1px dashed var(--bs-border-color) !important;
+                display: block !important;
+            }
+            .table-mobile-cards td[data-label="관리"]::before { content: ""; margin: 0; }
+            .table-mobile-cards .btn-group { gap: 0.4rem; display: flex; width: 100%; }
+            .table-mobile-cards .btn-group .btn { 
+                flex: 1; border-radius: 6px !important; font-size: 0.75rem; padding: 0.35rem; 
+            }
         }
     </style>
     {% block extra_style %}{% endblock %}

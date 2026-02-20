@@ -35,18 +35,32 @@
                         </div>
                         
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-primary">차변 (받는 쪽 / 비용)</label>
+                            <label class="form-label small fw-bold text-primary">차변 (받는 쪽 / 비용 +)</label>
                             <select name="debit_account" class="form-select" required>
-                                {% for group in form.debit_account.field.choices %}
-                                    <option value="{{ group.0 }}" {% if form.debit_account.value|stringformat:"s" == group.0|stringformat:"s" %}selected{% endif %}>{{ group.1 }}</option>
+                                <option value="">--- 항목 선택 ---</option>
+                                {% for type, accounts in debit_accounts.items %}
+                                    <optgroup label="{{ type }}">
+                                        {% for acc in accounts %}
+                                            <option value="{{ acc.id }}" {% if form.debit_account.value|stringformat:"s" == acc.id|stringformat:"s" %}selected{% endif %}>
+                                                {% if acc.type == '자산' or acc.type == '비용' %}+{% else %}-{% endif %} {{ acc.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </optgroup>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-danger">대변 (주는 쪽 / 수익)</label>
+                            <label class="form-label small fw-bold text-danger">대변 (주는 쪽 / 수익 -)</label>
                             <select name="credit_account" class="form-select" required>
-                                {% for group in form.credit_account.field.choices %}
-                                    <option value="{{ group.0 }}" {% if form.credit_account.value|stringformat:"s" == group.0|stringformat:"s" %}selected{% endif %}>{{ group.1 }}</option>
+                                <option value="">--- 항목 선택 ---</option>
+                                {% for type, accounts in credit_accounts.items %}
+                                    <optgroup label="{{ type }}">
+                                        {% for acc in accounts %}
+                                            <option value="{{ acc.id }}" {% if form.credit_account.value|stringformat:"s" == acc.id|stringformat:"s" %}selected{% endif %}>
+                                                {% if acc.type == '부채' or acc.type == '수익' or acc.type == '순자산' %}+{% else %}-{% endif %} {{ acc.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </optgroup>
                                 {% endfor %}
                             </select>
                         </div>

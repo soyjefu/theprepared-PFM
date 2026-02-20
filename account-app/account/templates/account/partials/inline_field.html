@@ -1,0 +1,33 @@
+{% load humanize %}
+{% load account_extras %}
+
+<div class="inline-editable px-1 py-1 rounded w-100 h-100" 
+     style="cursor: pointer; transition: background 0.1s;"
+     hx-get="{% url 'account:transaction_inline_update' tx.pk %}?field={{ field }}" 
+     hx-trigger="click" 
+     hx-swap="outerHTML" 
+     onmouseover="this.style.backgroundColor='rgba(var(--bs-primary-rgb), 0.05)'"
+     onmouseout="this.style.backgroundColor='transparent'">
+    
+    {% if field == 'amount' %}
+        <div class="text-end fw-bold">{{ tx.amount|intcomma }}</div>
+    {% elif field == 'item' %}
+        <div class="fw-bold">{{ tx.item }}</div>
+    {% elif field == 'memo' %}
+        <div class="small text-body-secondary">
+            {% if tx.memo %}{{ tx.memo }}{% else %}<span class="opacity-50 small italic">메모...</span>{% endif %}
+        </div>
+    {% elif field == 'debit_account' or field == 'credit_account' %}
+        {% with acc=tx|get_obj_attr:field %}
+        <span class="badge 
+            {% if acc.type == '자산' %}badge-asset
+            {% elif acc.type == '부채' %}badge-liability
+            {% elif acc.type == '비용' %}badge-expense
+            {% elif acc.type == '수익' %}badge-income
+            {% else %}badge-equity{% endif %}
+            fw-normal px-2">
+            {{ acc.name }}
+        </span>
+        {% endwith %}
+    {% endif %}
+</div>
