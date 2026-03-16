@@ -12,6 +12,7 @@ services:
     container_name: account_app
     restart: unless-stopped
     environment:
+      TZ: Asia/Seoul
       POSTGRES_HOST: postgres_db
       POSTGRES_DB: ${POSTGRES_DB_A}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -20,6 +21,8 @@ services:
       DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE_A}
     volumes:
       - ./account-app:/app
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     networks:
       - theprepared
     stdin_open: true
