@@ -11,6 +11,11 @@ services:
       dockerfile: Dockerfile
     container_name: account_app
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
     environment:
       TZ: Asia/Seoul
       POSTGRES_HOST: postgres_db
