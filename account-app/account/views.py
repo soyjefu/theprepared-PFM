@@ -417,7 +417,7 @@ def asset_status(request):
     assets = [acc for acc in accounts if acc.type == '자산' and acc.category != 'SAVING']
     savings = [acc for acc in accounts if acc.type == '자산' and acc.category == 'SAVING']
     liabilities = [acc for acc in accounts if acc.type == '부채']
-    
+
     current_total_assets = sum(acc.current_balance for acc in assets)
     current_total_savings = sum(acc.current_balance for acc in savings)
     current_total_liabilities = sum(acc.current_balance for acc in liabilities)
@@ -430,7 +430,59 @@ def asset_status(request):
 
     all_balances = [abs(acc.current_balance) for acc in assets + savings + liabilities]
     max_graph_value = max(all_balances) if all_balances else 1
-    
+
+    # --- 투자 계좌 수익률 계산 ---
+    investment_accounts = [acc for acc in accounts if acc.is_investment and acc.type == '자산']
+    for inv_acc in investment_accounts:
+        # 입금: 자산/부채 등에서 이체 (수익/비용 제외)
+        deposits = Transaction.objects.filter(
+            owner=request.user, debit_account=inv_acc, date__lte=today
+        ).exclude(
+            credit_account__type__in=['수익', '비용']
+        ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
+        # 출금: 자산/부채 등으로 이체 (수익/비용 제외)
+        withdrawals = Transaction.objects.filter(
+            owner=request.user, credit_account=inv_acc, date__lte=today
+        ).exclude(
+            debit_account__type__in=['수익', '비용']
+        ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
+        # 투자 수익
+        gains = Transaction.objects.filter(
+            owner=request.user, debit_account=inv_acc,
+            credit_account__type='수익', date__lte=today
+        ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
+        # 투자 손실
+        losses = Transaction.objects.filter(
+            owner=request.user, credit_account=inv_acc,
+            debit_account__type='비용', date__lte=today
+        ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
+
+        net_deposits = deposits - withdrawals
+        inv_acc.auto_principal = net_deposits
+        inv_acc.principal = inv_acc.investment_principal if inv_acc.investment_principal is not None else net_deposits
+        inv_acc.current_value = inv_acc.current_balance
+        inv_acc.investment_gain = gains
+        inv_acc.investment_loss = losses
+        inv_acc.net_pnl = gains - losses
+        inv_acc.return_rate = (
+            ((inv_acc.current_value - inv_acc.principal) / abs(inv_acc.principal) * 100)
+            if inv_acc.principal != 0 else Decimal(0)
+        )
+
+    inv_total_principal = sum(a.principal for a in investment_accounts) if investment_accounts else Decimal(0)
+    inv_total_current_value = sum(a.current_value for a in investment_accounts) if investment_accounts else Decimal(0)
+    inv_total_net_pnl = sum(a.net_pnl for a in investment_accounts) if investment_accounts else Decimal(0)
+    inv_total_return_rate = (
+        ((inv_total_current_value - inv_total_principal) / abs(inv_total_principal) * 100)
+        if inv_total_principal != 0 else Decimal(0)
+    )
+    last_investment_tx = Transaction.objects.filter(
+        owner=request.user, date__lte=today
+    ).filter(
+        Q(debit_account__is_investment=True) | Q(credit_account__is_investment=True)
+    ).order_by('-date', '-created_at').first()
+    investment_last_update = last_investment_tx.date if last_investment_tx else None
+
     context = {
         'assets': assets, 'savings': savings, 'liabilities': liabilities,
         'current_total_assets': current_total_assets,
@@ -447,8 +499,13 @@ def asset_status(request):
         'monthly_savings': monthly_savings, 'monthly_repayments': monthly_repayments,
         'monthly_net_profit': monthly_net_profit,
         'available_cash': available_cash,
-        'years': range(2020, today.year + 2
-                       ), 'months': range(1, 13),
+        'years': range(2020, today.year + 2), 'months': range(1, 13),
+        'investment_accounts': investment_accounts,
+        'inv_total_principal': inv_total_principal,
+        'inv_total_current_value': inv_total_current_value,
+        'inv_total_net_pnl': inv_total_net_pnl,
+        'inv_total_return_rate': inv_total_return_rate,
+        'investment_last_update': investment_last_update,
     }
 
     # --- 기간 설정: 최근 1년 (현재 월 포함) ---
@@ -841,4 +898,23 @@ def reports_view(request):
     }
     return render(request, 'account/reports.html', context)
 
-    
+
+@login_required
+def investment_principal_update(request, pk):
+    account = get_object_or_404(Account, pk=pk, owner=request.user, is_investment=True)
+
+    if request.method == 'POST':
+        value = request.POST.get('investment_principal', '').strip()
+        if value == '' or value == '자동':
+            account.investment_principal = None
+        else:
+            try:
+                account.investment_principal = Decimal(value.replace(',', ''))
+            except Exception:
+                pass
+        account.save()
+        return redirect('account:asset_status')
+
+    return render(request, 'account/partials/investment_principal_form.html', {
+        'account': account,
+    })

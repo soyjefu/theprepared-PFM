@@ -27,6 +27,7 @@ urlpatterns = [
     path('preset/<int:pk>/delete/', views.preset_delete, name='preset_delete'),
     path('account/<int:pk>/update/', views.account_update, name='account_update'),
     path('account/<int:pk>/delete/', views.account_delete, name='account_delete'),
+    path('account/<int:pk>/investment-principal/', views.investment_principal_update, name='investment_principal_update'),
     
     #예산 및 통계계 관련
     path('reports/', views.reports_view, name='reports'),

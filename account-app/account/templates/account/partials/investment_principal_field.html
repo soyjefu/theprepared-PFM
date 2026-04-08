@@ -1,0 +1,16 @@
+{% load humanize %}
+<div class="px-1 py-1 rounded"
+     style="cursor: pointer; transition: background 0.15s;"
+     hx-get="{% url 'account:investment_principal_update' account.pk %}"
+     hx-trigger="click"
+     hx-target="#principal-{{ account.pk }}"
+     hx-swap="innerHTML"
+     onmouseover="this.style.backgroundColor='rgba(var(--bs-primary-rgb), 0.08)'"
+     onmouseout="this.style.backgroundColor='transparent'">
+    <div class="balance-main">{{ account.principal|intcomma }}원</div>
+    {% if account.investment_principal is not None %}
+    <div class="small text-warning">수동 설정</div>
+    {% else %}
+    <div class="balance-sub">자동 계산</div>
+    {% endif %}
+</div>

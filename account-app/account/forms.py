@@ -67,16 +67,18 @@ class AccountForm(forms.ModelForm):
 
     class Meta:
         model = Account
-        fields = ['type', 'name', 'category', 'is_active']
+        fields = ['type', 'name', 'category', 'is_active', 'is_investment']
         labels = {
             'name': '항목명',
             'category': '계정 유형',
             'is_active': '활성 상태',
+            'is_investment': '투자 계좌',
         }
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_investment': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
     def clean(self):

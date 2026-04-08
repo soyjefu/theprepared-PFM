@@ -1,0 +1,18 @@
+{% load humanize %}
+<form method="post"
+      action="{% url 'account:investment_principal_update' account.pk %}"
+      class="d-flex gap-1 align-items-center justify-content-end">
+    {% csrf_token %}
+    <input type="text"
+           name="investment_principal"
+           class="form-control form-control-sm text-end fw-bold"
+           value="{% if account.investment_principal is not None %}{{ account.investment_principal|floatformat:0 }}{% endif %}"
+           placeholder="자동"
+           autofocus
+           onfocus="this.select()"
+           style="max-width: 140px;">
+    <button type="submit" class="btn btn-sm btn-primary">
+        <i class="fa-solid fa-check"></i>
+    </button>
+    <small class="text-secondary text-nowrap">비우면 자동</small>
+</form>

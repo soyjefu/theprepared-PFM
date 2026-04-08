@@ -152,21 +152,33 @@
                         <form method="post" class="row g-3">
                             {% csrf_token %}
                             {% for field in account_form %}
-                            <div class="{% if field.name == 'is_active' %}col-12 mt-3{% else %}col-md-6{% endif %}">
-                                {% if field.name == 'is_active' %}
-                                <div class="form-check form-switch p-3 bg-white rounded border">
-                                    {{ field }}
-                                    <label class="form-check-label fw-bold ms-2">{{ field.label }}</label>
+                            {% if field.name == 'is_active' or field.name == 'is_investment' %}
+                            {% if field.name == 'is_active' %}
+                            <div class="col-12 mt-3">
+                                <div class="d-flex gap-4 p-3 bg-white rounded border">
+                                    <div class="form-check form-switch mb-0">
+                                        {{ field }}
+                                        <label class="form-check-label fw-bold ms-2" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                    </div>
+                            {% endif %}
+                            {% if field.name == 'is_investment' %}
+                                    <div class="form-check form-switch mb-0">
+                                        {{ field }}
+                                        <label class="form-check-label fw-bold ms-2" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                    </div>
                                 </div>
-                                {% else %}
+                            </div>
+                            {% endif %}
+                            {% else %}
+                            <div class="col-md-6">
                                 <label class="form-label small fw-bold">
                                     {{ field.label }}
                                     {% if field.name == 'debit_account' or field.name == 'account' %}(+){% endif %}
                                     {% if field.name == 'credit_account' %}(-){% endif %}
                                 </label>
                                 {{ field }}
-                                {% endif %}
                             </div>
+                            {% endif %}
                             {% endfor %}
                             <div class="col-12 text-end">
                                 <button type="submit" name="add_account" class="btn btn-primary px-4">계정 추가</button>

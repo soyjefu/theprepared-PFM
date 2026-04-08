@@ -31,6 +31,11 @@ class Account(models.Model):
         verbose_name='계정 유형'
     )
     is_active = models.BooleanField(default=True, verbose_name="활성 여부")
+    is_investment = models.BooleanField(default=False, verbose_name="투자 계좌 여부")
+    investment_principal = models.DecimalField(
+        max_digits=12, decimal_places=0, null=True, blank=True,
+        verbose_name="투자 원금 (수동)"
+    )
 
     def __str__(self):
         return f"{self.name} ({self.type})"
