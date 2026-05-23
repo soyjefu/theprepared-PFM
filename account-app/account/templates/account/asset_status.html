@@ -24,31 +24,79 @@
         font-size: 0.85rem;
         color: var(--bs-body-secondary-color);
     }
+    @media (max-width: 768px) {
+        /* asset_status 테이블 카드화 보조: 잔액/비중 셀의 가로 스크롤 방지, data-label 라벨 가독성 */
+        .table-mobile-cards td[data-label="잔액"],
+        .table-mobile-cards td[data-label="비중"],
+        .table-mobile-cards td[data-label="원금"],
+        .table-mobile-cards td[data-label="현재가치"],
+        .table-mobile-cards td[data-label="투자손익"],
+        .table-mobile-cards td[data-label="수익률"] {
+            text-align: right;
+        }
+        .table-mobile-cards td[data-label="비중"] .progress {
+            min-width: 100px;
+            margin-left: auto;
+        }
+        /* 카테고리 구분 행 (저축 항목 등) */
+        .table-mobile-cards tr.category-divider td {
+            background-color: var(--bs-tertiary-bg);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--bs-secondary-color);
+            padding: 0.5rem 0.75rem !important;
+            border-radius: 0.25rem;
+            display: block !important;
+            text-align: left !important;
+        }
+        .table-mobile-cards tr.category-divider td::before {
+            content: none !important;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-end mb-4">
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-stretch align-items-md-end gap-3 mb-4">
     <div>
         <h2 class="fw-bold mb-0">자산 현황</h2>
         <p class="text-secondary mb-0">전체 자산 및 부채 현황을 확인하세요.</p>
     </div>
-    <div class="d-flex gap-2">
-        <form method="get" class="d-flex gap-2 align-items-center bg-body-tertiary p-2 rounded border">
-            <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+    <div>
+        <form method="get" class="d-flex flex-wrap gap-2 align-items-center bg-body-tertiary p-2 rounded border">
+            {% if range_value %}<input type="hidden" name="range" value="{{ range_value }}">{% endif %}
+            <select name="year" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
                 {% for y in years %}
                 <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}년</option>
                 {% endfor %}
             </select>
-            <select name="month" class="form-select form-select-sm" onchange="this.form.submit()">
+            <select name="month" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
                 {% for m in months %}
                 <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }}월</option>
                 {% endfor %}
             </select>
-            <span class="text-nowrap small text-secondary me-1">손익 기준</span>
+            <span class="text-nowrap small text-secondary flex-shrink-0">손익 기준</span>
         </form>
     </div>
 </div>
+
+{% if missing_presets %}
+<div class="alert alert-warning d-flex flex-column flex-sm-row align-items-start justify-content-between gap-2 mb-4">
+    <div class="flex-grow-1">
+        <i class="fa-solid fa-triangle-exclamation me-2"></i>
+        이번 달 누락된 고정 거래 <strong>{{ missing_presets|length }}건</strong>
+        <ul class="small mb-0 mt-1 ps-3">
+            {% for p in missing_presets %}
+            <li>
+                <span class="text-secondary">{{ p.expected_date|date:"m/d" }}</span> · {{ p.name }}
+                {% if p.amount %}<span class="text-secondary">({{ p.amount|intcomma }}원)</span>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    <a href="{% url 'account:transaction_create' %}" class="btn btn-sm btn-warning text-nowrap align-self-stretch align-self-sm-start">입력하기</a>
+</div>
+{% endif %}
 
 <div class="row g-4 mb-4">
     <!-- 순자산 요약 카드 -->
@@ -59,7 +107,16 @@
                     <h5 class="card-title opacity-75 mb-0">현재 순자산</h5>
                     <i class="fa-solid fa-piggy-bank fs-4 opacity-50"></i>
                 </div>
-                <h1 class="display-5 fw-bold mb-3">{{ current_net_worth|intcomma }}<span class="fs-4 ms-1">원</span></h1>
+                <h1 class="display-5 fw-bold mb-2">{{ current_net_worth|intcomma }}<span class="fs-4 ms-1">원</span></h1>
+                <div class="small mb-3 opacity-90">
+                    {% if net_worth_change > 0 %}
+                        <i class="fa-solid fa-arrow-up me-1"></i>전월 대비 +{{ net_worth_change|intcomma }}원
+                    {% elif net_worth_change < 0 %}
+                        <i class="fa-solid fa-arrow-down me-1"></i>전월 대비 {{ net_worth_change|intcomma }}원
+                    {% else %}
+                        <i class="fa-solid fa-minus me-1"></i>전월 대비 변동 없음
+                    {% endif %}
+                </div>
                 <div class="d-flex justify-content-between border-top border-white border-opacity-25 pt-3">
                     <span class="opacity-75 small">최종 순자산 (미래 포함)</span>
                     <span class="fw-bold">{{ net_worth|intcomma }}원</span>
@@ -100,12 +157,52 @@
 
 <!-- 순자산 추이 차트 -->
 <div class="card shadow-sm mb-4">
-    <div class="card-header bg-transparent border-0 pt-4 px-4">
+    <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
         <h5 class="fw-bold mb-0">월별 순자산 추이</h5>
+        <div class="btn-group btn-group-sm" role="group" aria-label="기간 선택">
+            {% for opt in range_options %}
+            <a href="?{% if qs_without_range %}{{ qs_without_range }}&{% endif %}range={{ opt.value }}"
+               class="btn {% if range_value == opt.value %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                {{ opt.label }}
+            </a>
+            {% endfor %}
+        </div>
     </div>
     <div class="card-body p-4">
         <div class="chart-container">
             <canvas id="netWorthChart"></canvas>
+        </div>
+        <div class="text-secondary small mt-2">
+            <i class="fa-solid fa-circle-info me-1"></i>
+            현재월 데이터는 오늘까지의 누계입니다. 점선은 향후 3개월 예약 거래를 반영한 예측치예요.
+        </div>
+    </div>
+</div>
+
+<!-- Phase 3.3: 자산/부채 구성 도넛 -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-transparent border-0 pt-4 px-4">
+                <h6 class="fw-bold mb-0"><i class="fa-solid fa-chart-pie me-2 text-primary"></i>자산 구성 (카테고리별)</h6>
+            </div>
+            <div class="card-body p-4">
+                <div style="position:relative;height:240px;">
+                    <canvas id="assetDoughnut"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-transparent border-0 pt-4 px-4">
+                <h6 class="fw-bold mb-0"><i class="fa-solid fa-chart-pie me-2 text-danger"></i>부채 구성 (계좌별)</h6>
+            </div>
+            <div class="card-body p-4">
+                <div style="position:relative;height:240px;">
+                    <canvas id="liabilityDoughnut"></canvas>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -120,44 +217,44 @@
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
+                    <table class="table table-hover align-middle mb-0 table-mobile-cards">
                         <thead class="table-light text-secondary small">
                             <tr>
                                 <th class="px-4 border-0">항목명</th>
                                 <th class="border-0">현재 잔액 / 최종 잔액</th>
-                                <th class="border-0 text-end px-4" style="width: 200px;">비중</th>
+                                <th class="border-0 text-end px-4" style="min-width: 140px;">비중</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for account in assets %}
                             <tr class="account-row">
-                                <td class="px-4 border-0">
+                                <td class="px-4 border-0" data-label="항목">
                                     <div class="fw-medium">{{ account.name }}</div>
                                     <div class="small text-secondary">{{ account.get_category_display }}</div>
                                 </td>
-                                <td class="border-0">
+                                <td class="border-0" data-label="잔액">
                                     <div class="balance-main">{{ account.current_balance|intcomma }}원</div>
                                     <div class="balance-sub">{{ account.total_balance|intcomma }}원</div>
                                 </td>
-                                <td class="px-4 border-0">
+                                <td class="px-4 border-0" data-label="비중">
                                     <div class="progress bg-primary-subtle">
                                         <div class="progress-bar bg-primary" style="width: {% widthratio account.current_balance|slice:'1:'|add:'0' max_graph_value 100 %}%;"></div>
                                     </div>
                                 </td>
                             </tr>
                             {% endfor %}
-                            <tr class="table-light"><td colspan="3" class="px-4 py-1 small fw-bold text-secondary">저축 항목</td></tr>
+                            <tr class="category-divider"><td colspan="3" class="px-4 py-1 small fw-bold text-secondary bg-body-tertiary">저축 항목</td></tr>
                             {% for account in savings %}
                             <tr class="account-row">
-                                <td class="px-4 border-0">
+                                <td class="px-4 border-0" data-label="항목">
                                     <div class="fw-medium">{{ account.name }}</div>
                                     <div class="small text-secondary">저축</div>
                                 </td>
-                                <td class="border-0">
+                                <td class="border-0" data-label="잔액">
                                     <div class="balance-main">{{ account.current_balance|intcomma }}원</div>
                                     <div class="balance-sub">{{ account.total_balance|intcomma }}원</div>
                                 </td>
-                                <td class="px-4 border-0">
+                                <td class="px-4 border-0" data-label="비중">
                                     <div class="progress bg-success-subtle">
                                         <div class="progress-bar bg-success" style="width: {% widthratio account.current_balance max_graph_value 100 %}%;"></div>
                                     </div>
@@ -182,12 +279,12 @@
                 <ul class="list-group list-group-flush">
                     {% for account in liabilities %}
                     <li class="list-group-item px-4 py-3 border-0 account-row">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <div>
-                                <div class="fw-medium">{{ account.name }}</div>
+                        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2 mb-2">
+                            <div class="text-truncate" style="min-width: 0;">
+                                <div class="fw-medium text-truncate">{{ account.name }}</div>
                                 <div class="small text-secondary">부채</div>
                             </div>
-                            <div class="text-end">
+                            <div class="text-sm-end">
                                 <div class="balance-main text-danger">{{ account.current_balance|intcomma }}원</div>
                                 <div class="balance-sub">{{ account.total_balance|intcomma }}원</div>
                             </div>
@@ -204,7 +301,7 @@
 </div>
 
 {% if investment_accounts %}
-<!-- 투자 수익률 섹션 -->
+<!-- [v1.2] 통합 투자 수익률 (외부 자본 기준) -->
 <div class="card shadow-sm mb-4">
     <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
         <div>
@@ -213,13 +310,42 @@
             <small class="text-secondary">마지막 거래: {{ investment_last_update|date:"Y-m-d" }}</small>
             {% endif %}
         </div>
-        <span class="badge fs-6 {% if inv_total_return_rate >= 0 %}bg-success-subtle text-success{% else %}bg-danger-subtle text-danger{% endif %}">
-            전체 {% if inv_total_return_rate >= 0 %}+{% endif %}{{ inv_total_return_rate|floatformat:2 }}%
+        <span class="badge fs-6 {% if consolidated_return_rate >= 0 %}bg-success-subtle text-success{% else %}bg-danger-subtle text-danger{% endif %}">
+            {% if consolidated_return_rate >= 0 %}+{% endif %}{{ consolidated_return_rate|floatformat:2 }}%
         </span>
+    </div>
+    <div class="card-body px-4 pb-3 pt-2">
+        <div class="row row-cols-1 row-cols-sm-3 g-3 text-center" style="font-size:0.85rem;">
+            <div class="col">
+                <div class="text-secondary small">순 투자금</div>
+                <div class="fw-bold">{{ consolidated_net_invested|intcomma }}원</div>
+            </div>
+            <div class="col">
+                <div class="text-secondary small">현재 총 가치</div>
+                <div class="fw-bold">{{ consolidated_current_value|intcomma }}원</div>
+            </div>
+            <div class="col">
+                <div class="text-secondary small">총 손익</div>
+                <div class="fw-bold {% if consolidated_pnl >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    {% if consolidated_pnl >= 0 %}+{% endif %}{{ consolidated_pnl|intcomma }}원
+                </div>
+                <div class="small text-secondary">수익 {{ consolidated_gains|intcomma }} / 손실 {{ consolidated_losses|intcomma }}</div>
+            </div>
+        </div>
+        <div class="text-secondary mt-2" style="font-size:0.7rem;">
+            투자계좌 간 이체를 제거한 외부 자본 기준입니다. 순 투자금 = 외부 입금 − 외부 출금
+        </div>
+    </div>
+</div>
+
+<!-- 계좌별 상세 -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-transparent border-0 pt-3 px-4">
+        <h6 class="fw-bold mb-0 text-secondary"><i class="fa-solid fa-wallet me-2"></i>계좌별 상세</h6>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
+            <table class="table table-hover align-middle mb-0 table-mobile-cards">
                 <thead class="table-light text-secondary small">
                     <tr>
                         <th class="px-4 border-0">계좌명</th>
@@ -232,16 +358,22 @@
                 <tbody>
                     {% for account in investment_accounts %}
                     <tr class="account-row">
-                        <td class="px-4 border-0">
+                        <td class="px-4 border-0" data-label="계좌">
                             <div class="fw-medium">{{ account.name }}</div>
+                            {% if account.inter_in or account.inter_out %}
+                            <div class="small text-secondary" style="font-size:0.7rem;">
+                                {% if account.inter_in %}← 타 투자계좌에서 +{{ account.inter_in|intcomma }}{% endif %}
+                                {% if account.inter_out %}→ 타 투자계좌로 −{{ account.inter_out|intcomma }}{% endif %}
+                            </div>
+                            {% endif %}
                         </td>
-                        <td class="border-0 text-end" id="principal-{{ account.pk }}">
+                        <td class="border-0 text-end" id="principal-{{ account.pk }}" data-label="원금">
                             {% include "account/partials/investment_principal_field.html" %}
                         </td>
-                        <td class="border-0 text-end">
+                        <td class="border-0 text-end" data-label="현재가치">
                             <div class="balance-main">{{ account.current_value|intcomma }}원</div>
                         </td>
-                        <td class="border-0 text-end">
+                        <td class="border-0 text-end" data-label="투자손익">
                             <div class="fw-bold {% if account.net_pnl >= 0 %}text-success{% else %}text-danger{% endif %}">
                                 {% if account.net_pnl >= 0 %}+{% endif %}{{ account.net_pnl|intcomma }}원
                             </div>
@@ -249,26 +381,13 @@
                                 수익 {{ account.investment_gain|intcomma }} / 손실 {{ account.investment_loss|intcomma }}
                             </div>
                         </td>
-                        <td class="border-0 text-end px-4">
+                        <td class="border-0 text-end px-4" data-label="수익률">
                             <span class="badge fs-6 {% if account.return_rate >= 0 %}bg-success-subtle text-success{% else %}bg-danger-subtle text-danger{% endif %}">
                                 {% if account.return_rate >= 0 %}+{% endif %}{{ account.return_rate|floatformat:2 }}%
                             </span>
                         </td>
                     </tr>
                     {% endfor %}
-                    <tr class="table-light fw-bold">
-                        <td class="px-4 border-0">합계</td>
-                        <td class="border-0 text-end">{{ inv_total_principal|intcomma }}원</td>
-                        <td class="border-0 text-end">{{ inv_total_current_value|intcomma }}원</td>
-                        <td class="border-0 text-end {% if inv_total_net_pnl >= 0 %}text-success{% else %}text-danger{% endif %}">
-                            {% if inv_total_net_pnl >= 0 %}+{% endif %}{{ inv_total_net_pnl|intcomma }}원
-                        </td>
-                        <td class="border-0 text-end px-4">
-                            <span class="badge fs-6 {% if inv_total_return_rate >= 0 %}bg-success-subtle text-success{% else %}bg-danger-subtle text-danger{% endif %}">
-                                {% if inv_total_return_rate >= 0 %}+{% endif %}{{ inv_total_return_rate|floatformat:2 }}%
-                            </span>
-                        </td>
-                    </tr>
                 </tbody>
             </table>
         </div>
@@ -281,71 +400,92 @@
 {% block extra_script %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const canvasElement = document.getElementById('netWorthChart');
-    if (canvasElement) {
-        const ctx = canvasElement.getContext('2d');
-        const chartDataJson = '{{ chart_data_json|safe }}';
-        
-        // Theme-aware colors
-        const isDarkMode = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
-        const textColor = isDarkMode ? '#adb5bd' : '#6c757d';
+    const isDarkMode = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
+    const textColor = isDarkMode ? '#adb5bd' : '#6c757d';
+    const krwFormatter = new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' });
 
+    function formatAxisValue(value) {
+        if (Math.abs(value) >= 100000000) return (value / 100000000).toFixed(1) + '억';
+        if (Math.abs(value) >= 10000) return (value / 10000).toLocaleString() + '만';
+        return value.toLocaleString();
+    }
+
+    // --- 월별 순자산 추이 (actual + forecast) ---
+    const netWorthCanvas = document.getElementById('netWorthChart');
+    if (netWorthCanvas) {
+        const ctx = netWorthCanvas.getContext('2d');
         try {
-            const chartData = JSON.parse(chartDataJson);
+            const chartData = JSON.parse('{{ chart_data_json|escapejs }}');
             if (chartData.labels && chartData.labels.length > 0) {
                 const gradient = ctx.createLinearGradient(0, 0, 0, 300);
                 gradient.addColorStop(0, 'rgba(13, 110, 253, 0.2)');
                 gradient.addColorStop(1, 'rgba(13, 110, 253, 0.0)');
 
+                const isMobile = window.innerWidth < 768;
                 new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: chartData.labels,
-                        datasets: [{
-                            label: '월말 순자산',
-                            data: chartData.net_worth_data,
-                            borderColor: '#0d6efd',
-                            borderWidth: 3,
-                            backgroundColor: gradient,
-                            fill: true,
-                            tension: 0.4,
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                            pointBackgroundColor: '#0d6efd',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 2
-                        }]
+                        datasets: [
+                            {
+                                label: '실적 순자산',
+                                data: chartData.actual_data,
+                                borderColor: '#0d6efd',
+                                borderWidth: 3,
+                                backgroundColor: gradient,
+                                fill: true,
+                                tension: 0.4,
+                                spanGaps: false,
+                                pointRadius: 4,
+                                pointHoverRadius: 6,
+                                pointBackgroundColor: '#0d6efd',
+                                pointBorderColor: '#fff',
+                                pointBorderWidth: 2
+                            },
+                            {
+                                label: '예측 (미래 거래 반영)',
+                                data: chartData.forecast_data,
+                                borderColor: 'rgba(108, 117, 125, 0.85)',
+                                borderWidth: 2,
+                                borderDash: [6, 4],
+                                backgroundColor: 'transparent',
+                                fill: false,
+                                tension: 0.3,
+                                spanGaps: false,
+                                pointRadius: 3,
+                                pointHoverRadius: 5,
+                                pointBackgroundColor: 'rgba(108, 117, 125, 0.85)',
+                                pointBorderColor: '#fff',
+                                pointBorderWidth: 1
+                            }
+                        ]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        interaction: {
-                            intersect: false,
-                            mode: 'index',
-                        },
+                        interaction: { intersect: false, mode: 'index' },
                         scales: {
                             y: {
-                                grid: { 
-                                    color: gridColor,
-                                    drawBorder: false
-                                },
-                                ticks: {
-                                    color: textColor,
-                                    callback: function(value) {
-                                        if (value >= 100000000) return (value / 100000000).toFixed(1) + '억';
-                                        if (value >= 10000) return (value / 10000).toLocaleString() + '만';
-                                        return value.toLocaleString();
-                                    }
-                                }
+                                grid: { color: gridColor, drawBorder: false },
+                                ticks: { color: textColor, callback: formatAxisValue }
                             },
                             x: {
                                 grid: { display: false },
-                                ticks: { color: textColor }
+                                ticks: {
+                                    color: textColor,
+                                    maxRotation: 45,
+                                    autoSkip: true,
+                                    maxTicksLimit: isMobile ? 6 : 14
+                                }
                             }
                         },
                         plugins: {
-                            legend: { display: false },
+                            legend: {
+                                display: true,
+                                position: 'bottom',
+                                labels: { color: textColor, boxWidth: 14, font: { size: 11 } }
+                            },
                             tooltip: {
                                 backgroundColor: isDarkMode ? '#212529' : '#fff',
                                 titleColor: isDarkMode ? '#fff' : '#212529',
@@ -353,10 +493,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                 borderColor: '#0d6efd',
                                 borderWidth: 1,
                                 padding: 12,
-                                displayColors: false,
+                                displayColors: true,
                                 callbacks: {
                                     label: function(context) {
-                                        return ' 순자산: ' + new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(context.parsed.y);
+                                        if (context.parsed.y === null || context.parsed.y === undefined) return null;
+                                        return ' ' + context.dataset.label + ': ' + krwFormatter.format(context.parsed.y);
                                     }
                                 }
                             }
@@ -365,9 +506,65 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
         } catch (e) {
-            console.error('Chart error:', e);
+            console.error('NetWorth chart error:', e);
         }
     }
+
+    // --- 도넛 차트 공통 ---
+    const palette = ['#0d6efd', '#6610f2', '#20c997', '#fd7e14', '#dc3545', '#198754', '#6c757d', '#ffc107', '#0dcaf0', '#d63384'];
+
+    function renderDoughnut(canvasId, dataJson, fallbackText) {
+        const el = document.getElementById(canvasId);
+        if (!el) return;
+        let data;
+        try { data = JSON.parse(dataJson); } catch (e) { data = {}; }
+        const labels = Object.keys(data);
+        const values = labels.map(k => data[k]);
+
+        if (labels.length === 0) {
+            const ctx2 = el.getContext('2d');
+            ctx2.font = '14px sans-serif';
+            ctx2.fillStyle = textColor;
+            ctx2.textAlign = 'center';
+            ctx2.fillText(fallbackText, el.width / 2, el.height / 2);
+            return;
+        }
+
+        new Chart(el.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: labels.map((_, i) => palette[i % palette.length]),
+                    borderColor: isDarkMode ? '#1a1d20' : '#fff',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: textColor, boxWidth: 12, font: { size: 11 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((s, v) => s + v, 0);
+                                const pct = total ? (context.parsed / total * 100).toFixed(1) : 0;
+                                return ' ' + context.label + ': ' + krwFormatter.format(context.parsed) + ' (' + pct + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    renderDoughnut('assetDoughnut', '{{ asset_distribution_json|escapejs }}', '자산 데이터 없음');
+    renderDoughnut('liabilityDoughnut', '{{ liability_distribution_json|escapejs }}', '부채 데이터 없음');
 });
 </script>
 {% endblock %}

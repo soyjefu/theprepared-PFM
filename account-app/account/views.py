@@ -9,7 +9,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.urls import reverse
 from django.contrib import messages
 from .models import Account, Transaction, TransactionPreset, Budget
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from django.utils.dateparse import parse_date
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
@@ -171,9 +171,11 @@ def transaction_list(request):
         }
     }
     
-    if request.headers.get('HX-Request'):
+    is_htmx = request.headers.get('HX-Request') == 'true'
+    is_history_restore = request.headers.get('HX-History-Restore-Request') == 'true'
+    if is_htmx and not is_history_restore:
         return render(request, 'account/partials/transaction_table.html', context)
-        
+
     return render(request, 'account/transaction_list.html', context)
 
 @login_required
@@ -355,7 +357,20 @@ def asset_status(request):
     today = date.today()
     selected_year = int(request.GET.get('year', today.year))
     selected_month = int(request.GET.get('month', today.month))
-    
+
+    # --- 차트 기간 옵션 (Phase 3.1) ---
+    range_value = request.GET.get('range', '12')
+    range_options = [
+        {'value': '3', 'label': '3M'},
+        {'value': '6', 'label': '6M'},
+        {'value': '12', 'label': '1Y'},
+        {'value': '24', 'label': '2Y'},
+        {'value': 'all', 'label': '전체'},
+    ]
+    qs = request.GET.copy()
+    qs.pop('range', None)
+    qs_without_range = qs.urlencode()
+
     # --- 월별 현황 계산 ---
     monthly_transactions = Transaction.objects.filter(
         owner=request.user,
@@ -401,18 +416,33 @@ def asset_status(request):
         Transaction.objects.filter(owner=request.user, date__lte=today).values('credit_account_id').annotate(total=Sum('amount'))
     }
 
+    # Phase 3.2: 전월말 기준 잔액 (전월 대비 변동 계산용)
+    last_month_end = today.replace(day=1) - timedelta(days=1)
+    prev_debits = {
+        item['debit_account_id']: item['total'] for item in
+        Transaction.objects.filter(owner=request.user, date__lte=last_month_end).values('debit_account_id').annotate(total=Sum('amount'))
+    }
+    prev_credits = {
+        item['credit_account_id']: item['total'] for item in
+        Transaction.objects.filter(owner=request.user, date__lte=last_month_end).values('credit_account_id').annotate(total=Sum('amount'))
+    }
+
     for acc in accounts:
         total_debit = all_debits.get(acc.id, Decimal(0))
         total_credit = all_credits.get(acc.id, Decimal(0))
         current_debit = current_debits.get(acc.id, Decimal(0))
         current_credit = current_credits.get(acc.id, Decimal(0))
+        prev_debit = prev_debits.get(acc.id, Decimal(0))
+        prev_credit = prev_credits.get(acc.id, Decimal(0))
 
         if acc.type in ['자산', '비용']:
             acc.current_balance = current_debit - current_credit
             acc.total_balance = total_debit - total_credit
+            acc.prev_balance = prev_debit - prev_credit
         else:
             acc.current_balance = current_credit - current_debit
             acc.total_balance = total_credit - total_debit
+            acc.prev_balance = prev_credit - prev_debit
 
     assets = [acc for acc in accounts if acc.type == '자산' and acc.category != 'SAVING']
     savings = [acc for acc in accounts if acc.type == '자산' and acc.category == 'SAVING']
@@ -428,21 +458,88 @@ def asset_status(request):
     total_liabilities = sum(acc.total_balance for acc in liabilities)
     net_worth = total_assets + total_savings - total_liabilities
 
+    # Phase 3.2: 전월 대비 순자산 변동
+    prev_total_assets = sum(acc.prev_balance for acc in assets)
+    prev_total_savings = sum(acc.prev_balance for acc in savings)
+    prev_total_liabilities = sum(acc.prev_balance for acc in liabilities)
+    prev_net_worth = prev_total_assets + prev_total_savings - prev_total_liabilities
+    net_worth_change = current_net_worth - prev_net_worth
+
     all_balances = [abs(acc.current_balance) for acc in assets + savings + liabilities]
     max_graph_value = max(all_balances) if all_balances else 1
 
+    # Phase 3.3: 자산/부채 구성 도넛 차트 데이터
+    asset_distribution = {}
+    for acc in assets + savings:
+        if acc.current_balance > 0:
+            key = acc.get_category_display() or '일반'
+            asset_distribution[key] = asset_distribution.get(key, Decimal(0)) + acc.current_balance
+    asset_distribution = {k: float(v) for k, v in asset_distribution.items()}
+
+    liability_distribution = {}
+    for acc in liabilities:
+        if acc.current_balance > 0:
+            liability_distribution[acc.name] = float(acc.current_balance)
+
+    # Phase 3.4: 이번 달 누락 고정 거래
+    fixed_presets = TransactionPreset.objects.filter(
+        owner=request.user,
+        preset_type='FIXED',
+        day_of_month__isnull=False,
+        day_of_month__lte=today.day,
+    ).select_related('debit_account', 'credit_account')
+    missing_presets = []
+    for preset in fixed_presets:
+        try:
+            expected_date = date(today.year, today.month, preset.day_of_month)
+        except ValueError:
+            continue
+        exists = Transaction.objects.filter(
+            owner=request.user,
+            date__year=today.year,
+            date__month=today.month,
+            debit_account=preset.debit_account,
+            credit_account=preset.credit_account,
+            item=preset.item,
+        ).exists()
+        if not exists:
+            preset.expected_date = expected_date
+            missing_presets.append(preset)
+    missing_presets.sort(key=lambda p: p.expected_date)
+
     # --- 투자 계좌 수익률 계산 ---
-    investment_accounts = [acc for acc in accounts if acc.is_investment and acc.type == '자산']
+    all_investment_accounts = [acc for acc in accounts if acc.is_investment and acc.type == '자산']
+    investment_accounts = [acc for acc in all_investment_accounts if acc.current_balance != 0]
+    inv_account_ids = set(acc.id for acc in all_investment_accounts)
+
     for inv_acc in investment_accounts:
-        # 입금: 자산/부채 등에서 이체 (수익/비용 제외)
-        deposits = Transaction.objects.filter(
+        # 외부 입금 (비투자 계좌에서 들어온 돈만)
+        ext_deposits = Transaction.objects.filter(
             owner=request.user, debit_account=inv_acc, date__lte=today
         ).exclude(
             credit_account__type__in=['수익', '비용']
+        ).exclude(
+            credit_account_id__in=inv_account_ids
         ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
-        # 출금: 자산/부채 등으로 이체 (수익/비용 제외)
-        withdrawals = Transaction.objects.filter(
+        # 외부 출금 (비투자 계좌로 나간 돈만)
+        ext_withdrawals = Transaction.objects.filter(
             owner=request.user, credit_account=inv_acc, date__lte=today
+        ).exclude(
+            debit_account__type__in=['수익', '비용']
+        ).exclude(
+            debit_account_id__in=inv_account_ids
+        ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
+        # 투자계좌 간 입금 (타 투자계좌에서 받은 돈)
+        inter_in = Transaction.objects.filter(
+            owner=request.user, debit_account=inv_acc,
+            credit_account_id__in=inv_account_ids, date__lte=today
+        ).exclude(
+            credit_account__type__in=['수익', '비용']
+        ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
+        # 투자계좌 간 출금 (타 투자계좌로 보낸 돈)
+        inter_out = Transaction.objects.filter(
+            owner=request.user, credit_account=inv_acc,
+            debit_account_id__in=inv_account_ids, date__lte=today
         ).exclude(
             debit_account__type__in=['수익', '비용']
         ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
@@ -457,7 +554,13 @@ def asset_status(request):
             debit_account__type='비용', date__lte=today
         ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
 
-        net_deposits = deposits - withdrawals
+        inv_acc.ext_deposits = ext_deposits
+        inv_acc.ext_withdrawals = ext_withdrawals
+        inv_acc.inter_in = inter_in
+        inv_acc.inter_out = inter_out
+        total_deposits = ext_deposits + inter_in
+        total_withdrawals = ext_withdrawals + inter_out
+        net_deposits = total_deposits - total_withdrawals
         inv_acc.auto_principal = net_deposits
         inv_acc.principal = inv_acc.investment_principal if inv_acc.investment_principal is not None else net_deposits
         inv_acc.current_value = inv_acc.current_balance
@@ -468,6 +571,38 @@ def asset_status(request):
             ((inv_acc.current_value - inv_acc.principal) / abs(inv_acc.principal) * 100)
             if inv_acc.principal != 0 else Decimal(0)
         )
+
+    # --- [v1.2] 통합 투자 수익률 (외부→투자 전체 기준) ---
+    # 투자계좌 간 이체를 제거한, 외부에서 들어온 순수 자본만 집계
+    consolidated_ext_deposits = Transaction.objects.filter(
+        owner=request.user, debit_account_id__in=inv_account_ids, date__lte=today
+    ).exclude(
+        credit_account__type__in=['수익', '비용']
+    ).exclude(
+        credit_account_id__in=inv_account_ids
+    ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
+    consolidated_ext_withdrawals = Transaction.objects.filter(
+        owner=request.user, credit_account_id__in=inv_account_ids, date__lte=today
+    ).exclude(
+        debit_account__type__in=['수익', '비용']
+    ).exclude(
+        debit_account_id__in=inv_account_ids
+    ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
+    consolidated_gains = Transaction.objects.filter(
+        owner=request.user, debit_account_id__in=inv_account_ids,
+        credit_account__type='수익', date__lte=today
+    ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
+    consolidated_losses = Transaction.objects.filter(
+        owner=request.user, credit_account_id__in=inv_account_ids,
+        debit_account__type='비용', date__lte=today
+    ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
+    consolidated_net_invested = consolidated_ext_deposits - consolidated_ext_withdrawals
+    consolidated_current_value = sum(a.current_balance for a in all_investment_accounts)
+    consolidated_pnl = consolidated_current_value - consolidated_net_invested
+    consolidated_return_rate = (
+        (consolidated_pnl / abs(consolidated_net_invested) * 100)
+        if consolidated_net_invested != 0 else Decimal(0)
+    )
 
     inv_total_principal = sum(a.principal for a in investment_accounts) if investment_accounts else Decimal(0)
     inv_total_current_value = sum(a.current_value for a in investment_accounts) if investment_accounts else Decimal(0)
@@ -506,56 +641,130 @@ def asset_status(request):
         'inv_total_net_pnl': inv_total_net_pnl,
         'inv_total_return_rate': inv_total_return_rate,
         'investment_last_update': investment_last_update,
+        # [v1.2] 통합 투자 수익률
+        'consolidated_net_invested': consolidated_net_invested,
+        'consolidated_current_value': consolidated_current_value,
+        'consolidated_pnl': consolidated_pnl,
+        'consolidated_return_rate': consolidated_return_rate,
+        'consolidated_gains': consolidated_gains,
+        'consolidated_losses': consolidated_losses,
     }
 
-    # --- 기간 설정: 최근 1년 (현재 월 포함) ---
-    today = date.today()
-    end_date = today 
-    start_date = (today - relativedelta(months=11)).replace(day=1)
+    # --- 차트 데이터 (Phase 1.1 활성 계정만, 1.2 현재월 마커, 1.3 미래 forecast) ---
+    active_account_ids = list(accounts.values_list('id', flat=True))
 
-    chart_data = {
-        'labels': [],
-        'net_worth_data': [],
-    }
+    # Phase 3.1: 표시 기간 결정
+    if range_value == 'all':
+        first_tx = Transaction.objects.filter(
+            owner=request.user
+        ).filter(
+            Q(debit_account_id__in=active_account_ids) | Q(credit_account_id__in=active_account_ids)
+        ).order_by('date').first()
+        start_date = first_tx.date.replace(day=1) if first_tx else today.replace(day=1)
+    else:
+        try:
+            months_back = int(range_value)
+        except (TypeError, ValueError):
+            months_back = 12
+        start_date = (today - relativedelta(months=months_back - 1)).replace(day=1)
 
-    # 1. 시작일(start_date) 이전의 누적 순자산 계산 (기초 잔액)
+    forecast_end_date = today + relativedelta(months=3)
+
+    # 시작일 이전 누적 (활성 계정만)
     initial_assets = Transaction.objects.filter(
         owner=request.user, date__lt=start_date
     ).aggregate(
-        diff=Sum('amount', filter=Q(debit_account__type='자산')) - Sum('amount', filter=Q(credit_account__type='자산'))
+        diff=Sum('amount', filter=Q(debit_account__type='자산') & Q(debit_account_id__in=active_account_ids))
+            - Sum('amount', filter=Q(credit_account__type='자산') & Q(credit_account_id__in=active_account_ids))
     )
     initial_liabilities = Transaction.objects.filter(
         owner=request.user, date__lt=start_date
     ).aggregate(
-        diff=Sum('amount', filter=Q(credit_account__type='부채')) - Sum('amount', filter=Q(debit_account__type='부채'))
+        diff=Sum('amount', filter=Q(credit_account__type='부채') & Q(credit_account_id__in=active_account_ids))
+            - Sum('amount', filter=Q(debit_account__type='부채') & Q(debit_account_id__in=active_account_ids))
     )
-    
-    current_net_worth_accum = (initial_assets['diff'] or Decimal(0)) - (initial_liabilities['diff'] or Decimal(0))
+    initial_net_worth_accum = (initial_assets['diff'] or Decimal(0)) - (initial_liabilities['diff'] or Decimal(0))
 
-    # 2. 월별 변동분 계산 (성능을 위해 기간 내 거래만 가져옴)
-    monthly_changes = Transaction.objects.filter(
-        owner=request.user, date__range=[start_date, end_date]
+    # actual: start_date ~ today
+    actual_changes = Transaction.objects.filter(
+        owner=request.user, date__range=[start_date, today]
     ).values('date__year', 'date__month').annotate(
-        asset_diff=Sum('amount', filter=Q(debit_account__type='자산')) - Sum('amount', filter=Q(credit_account__type='자산')),
-        liab_diff=Sum('amount', filter=Q(credit_account__type='부채')) - Sum('amount', filter=Q(debit_account__type='부채'))
+        asset_diff=Sum('amount', filter=Q(debit_account__type='자산') & Q(debit_account_id__in=active_account_ids))
+            - Sum('amount', filter=Q(credit_account__type='자산') & Q(credit_account_id__in=active_account_ids)),
+        liab_diff=Sum('amount', filter=Q(credit_account__type='부채') & Q(credit_account_id__in=active_account_ids))
+            - Sum('amount', filter=Q(debit_account__type='부채') & Q(debit_account_id__in=active_account_ids))
     ).order_by('date__year', 'date__month')
+    actual_dict = {
+        (item['date__year'], item['date__month']): (item['asset_diff'] or Decimal(0), item['liab_diff'] or Decimal(0))
+        for item in actual_changes
+    }
 
-    changes_dict = {(item['date__year'], item['date__month']): (item['asset_diff'] or Decimal(0), item['liab_diff'] or Decimal(0)) 
-                    for item in monthly_changes}
+    # forecast: today 이후 ~ forecast_end_date
+    forecast_changes = Transaction.objects.filter(
+        owner=request.user, date__gt=today, date__lte=forecast_end_date
+    ).values('date__year', 'date__month').annotate(
+        asset_diff=Sum('amount', filter=Q(debit_account__type='자산') & Q(debit_account_id__in=active_account_ids))
+            - Sum('amount', filter=Q(credit_account__type='자산') & Q(credit_account_id__in=active_account_ids)),
+        liab_diff=Sum('amount', filter=Q(credit_account__type='부채') & Q(credit_account_id__in=active_account_ids))
+            - Sum('amount', filter=Q(debit_account__type='부채') & Q(debit_account_id__in=active_account_ids))
+    ).order_by('date__year', 'date__month')
+    forecast_dict = {
+        (item['date__year'], item['date__month']): (item['asset_diff'] or Decimal(0), item['liab_diff'] or Decimal(0))
+        for item in forecast_changes
+    }
 
-    # 3. 월별 라벨 및 누적 순자산 데이터 생성
+    chart_data = {
+        'labels': [],
+        'actual_data': [],
+        'forecast_data': [],
+        'current_month_index': None,
+    }
+    current_month_key = (today.year, today.month)
+    actual_accum = initial_net_worth_accum
+    forecast_accum = None
+    idx = 0
     temp_date = start_date
-    while temp_date <= end_date:
+    while temp_date <= forecast_end_date:
         year_month = (temp_date.year, temp_date.month)
-        asset_change, liab_change = changes_dict.get(year_month, (Decimal(0), Decimal(0)))
-        
-        current_net_worth_accum += (asset_change - liab_change)
-        
         chart_data['labels'].append(temp_date.strftime('%Y-%m'))
-        chart_data['net_worth_data'].append(float(current_net_worth_accum))
+
+        if year_month < current_month_key:
+            asset_change, liab_change = actual_dict.get(year_month, (Decimal(0), Decimal(0)))
+            actual_accum += (asset_change - liab_change)
+            chart_data['actual_data'].append(float(actual_accum))
+            chart_data['forecast_data'].append(None)
+        elif year_month == current_month_key:
+            asset_change, liab_change = actual_dict.get(year_month, (Decimal(0), Decimal(0)))
+            actual_accum += (asset_change - liab_change)
+            chart_data['actual_data'].append(float(actual_accum))
+            chart_data['forecast_data'].append(float(actual_accum))
+            chart_data['current_month_index'] = idx
+            forecast_accum = actual_accum
+            f_asset, f_liab = forecast_dict.get(year_month, (Decimal(0), Decimal(0)))
+            forecast_accum += (f_asset - f_liab)
+        else:
+            f_asset, f_liab = forecast_dict.get(year_month, (Decimal(0), Decimal(0)))
+            if forecast_accum is None:
+                forecast_accum = actual_accum + (f_asset - f_liab)
+            else:
+                forecast_accum += (f_asset - f_liab)
+            chart_data['actual_data'].append(None)
+            chart_data['forecast_data'].append(float(forecast_accum))
+
+        idx += 1
         temp_date += relativedelta(months=1)
 
     context['chart_data_json'] = json.dumps(chart_data)
+
+    # Phase 3.1, 3.2, 3.3, 3.4 컨텍스트 추가
+    context['range_value'] = range_value
+    context['range_options'] = range_options
+    context['qs_without_range'] = qs_without_range
+    context['prev_net_worth'] = prev_net_worth
+    context['net_worth_change'] = net_worth_change
+    context['asset_distribution_json'] = json.dumps(asset_distribution, ensure_ascii=False)
+    context['liability_distribution_json'] = json.dumps(liability_distribution, ensure_ascii=False)
+    context['missing_presets'] = missing_presets
 
     return render(request, 'account/asset_status.html', context)
 
@@ -826,12 +1035,17 @@ def reports_view(request):
         form = BudgetForm(user=request.user)
 
     # --- 데이터 준비 (이전과 동일) ---
-    all_expense_accounts = Account.objects.filter(owner=request.user, type='비용', is_active=True).order_by('name')
+    # 예산/지출 리포트에서 제외할 비용 계정 (투자 P&L성 비용)
+    EXCLUDED_EXPENSE_NAMES = ['투자 손실']
+
+    all_expense_accounts = Account.objects.filter(
+        owner=request.user, type='비용', is_active=True
+    ).exclude(name__in=EXCLUDED_EXPENSE_NAMES).order_by('name')
     fixed_expense_accounts = all_expense_accounts.filter(category='FIXED')
-    
+
     monthly_spending_query = Transaction.objects.filter(
         owner=request.user, date__year=year, date__month=month, debit_account__type='비용'
-    ).values('debit_account__name').annotate(total_spent=Sum('amount'))
+    ).exclude(debit_account__name__in=EXCLUDED_EXPENSE_NAMES).values('debit_account__name').annotate(total_spent=Sum('amount'))
     
     spending_dict = {item['debit_account__name']: item['total_spent'] for item in monthly_spending_query}
 

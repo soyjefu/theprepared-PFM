@@ -38,10 +38,11 @@
 <!-- 필터 영역 -->
 <div class="card filter-card mb-4 shadow-sm">
     <div class="card-body p-4">
-        <form method="get" class="row g-3" 
-              hx-get="{% url 'account:transaction_list' %}" 
-              hx-target="#transaction-table-wrapper" 
+        <form method="get" class="row g-3"
+              hx-get="{% url 'account:transaction_list' %}"
+              hx-target="#transaction-table-wrapper"
               hx-push-url="true"
+              hx-history="false"
               hx-indicator=".htmx-indicator">
             <div class="col-md-4">
                 <label class="form-label small fw-bold text-secondary">기간 선택</label>
