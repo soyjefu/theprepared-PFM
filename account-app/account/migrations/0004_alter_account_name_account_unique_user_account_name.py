@@ -5,20 +5,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('account', '0003_alter_transaction_options_account_owner_and_more'),
+        ("account", "0003_alter_transaction_options_account_owner_and_more"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='account',
-            name='name',
-            field=models.CharField(max_length=50, verbose_name='항목명'),
+            model_name="account",
+            name="name",
+            field=models.CharField(max_length=50, verbose_name="항목명"),
         ),
         migrations.AddConstraint(
-            model_name='account',
-            constraint=models.UniqueConstraint(fields=('owner', 'name'), name='unique_user_account_name'),
+            model_name="account",
+            constraint=models.UniqueConstraint(
+                fields=("owner", "name"), name="unique_user_account_name"
+            ),
         ),
     ]

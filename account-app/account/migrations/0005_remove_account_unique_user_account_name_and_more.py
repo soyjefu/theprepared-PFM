@@ -6,39 +6,45 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('account', '0004_alter_account_name_account_unique_user_account_name'),
+        ("account", "0004_alter_account_name_account_unique_user_account_name"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.RemoveConstraint(
-            model_name='account',
-            name='unique_user_account_name',
+            model_name="account",
+            name="unique_user_account_name",
         ),
         migrations.AddField(
-            model_name='account',
-            name='category',
-            field=models.CharField(choices=[('FIXED', '고정'), ('VARIABLE', '유동'), ('GENERAL', '일반')], default='GENERAL', max_length=10, verbose_name='계정 유형'),
+            model_name="account",
+            name="category",
+            field=models.CharField(
+                choices=[("FIXED", "고정"), ("VARIABLE", "유동"), ("GENERAL", "일반")],
+                default="GENERAL",
+                max_length=10,
+                verbose_name="계정 유형",
+            ),
         ),
         migrations.AlterField(
-            model_name='account',
-            name='name',
+            model_name="account",
+            name="name",
             field=models.CharField(max_length=100),
         ),
         migrations.AlterField(
-            model_name='account',
-            name='owner',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL),
+            model_name="account",
+            name="owner",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL
+            ),
         ),
         migrations.AlterField(
-            model_name='account',
-            name='type',
+            model_name="account",
+            name="type",
             field=models.CharField(max_length=10),
         ),
         migrations.AlterUniqueTogether(
-            name='account',
-            unique_together={('owner', 'name')},
+            name="account",
+            unique_together={("owner", "name")},
         ),
     ]

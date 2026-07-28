@@ -6,25 +6,52 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('account', '0005_remove_account_unique_user_account_name_and_more'),
+        ("account", "0005_remove_account_unique_user_account_name_and_more"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Budget',
+            name="Budget",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('year', models.IntegerField(verbose_name='연도')),
-                ('month', models.IntegerField(verbose_name='월')),
-                ('amount', models.DecimalField(decimal_places=0, max_digits=12, verbose_name='예산 금액')),
-                ('account', models.ForeignKey(limit_choices_to={'type': '비용'}, on_delete=django.db.models.deletion.CASCADE, to='account.account', verbose_name='비용 계정')),
-                ('owner', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL, verbose_name='소유자')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("year", models.IntegerField(verbose_name="연도")),
+                ("month", models.IntegerField(verbose_name="월")),
+                (
+                    "amount",
+                    models.DecimalField(
+                        decimal_places=0, max_digits=12, verbose_name="예산 금액"
+                    ),
+                ),
+                (
+                    "account",
+                    models.ForeignKey(
+                        limit_choices_to={"type": "비용"},
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="account.account",
+                        verbose_name="비용 계정",
+                    ),
+                ),
+                (
+                    "owner",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to=settings.AUTH_USER_MODEL,
+                        verbose_name="소유자",
+                    ),
+                ),
             ],
             options={
-                'unique_together': {('owner', 'year', 'month', 'account')},
+                "unique_together": {("owner", "year", "month", "account")},
             },
         ),
     ]

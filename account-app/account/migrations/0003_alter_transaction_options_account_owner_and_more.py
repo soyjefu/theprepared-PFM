@@ -6,33 +6,47 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('account', '0002_transactionpreset'),
+        ("account", "0002_transactionpreset"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='transaction',
-            options={'ordering': ['-created_at']},
+            name="transaction",
+            options={"ordering": ["-created_at"]},
         ),
         migrations.AddField(
-            model_name='account',
-            name='owner',
-            field=models.ForeignKey(default=1, on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL, verbose_name='소유자'),
+            model_name="account",
+            name="owner",
+            field=models.ForeignKey(
+                default=1,
+                on_delete=django.db.models.deletion.CASCADE,
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="소유자",
+            ),
             preserve_default=False,
         ),
         migrations.AddField(
-            model_name='transaction',
-            name='owner',
-            field=models.ForeignKey(default=1, on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL, verbose_name='소유자'),
+            model_name="transaction",
+            name="owner",
+            field=models.ForeignKey(
+                default=1,
+                on_delete=django.db.models.deletion.CASCADE,
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="소유자",
+            ),
             preserve_default=False,
         ),
         migrations.AddField(
-            model_name='transactionpreset',
-            name='owner',
-            field=models.ForeignKey(default=1, on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL, verbose_name='소유자'),
+            model_name="transactionpreset",
+            name="owner",
+            field=models.ForeignKey(
+                default=1,
+                on_delete=django.db.models.deletion.CASCADE,
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="소유자",
+            ),
             preserve_default=False,
         ),
     ]

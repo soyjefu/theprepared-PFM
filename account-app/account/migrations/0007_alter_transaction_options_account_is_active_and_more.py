@@ -4,34 +4,52 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('account', '0006_budget'),
+        ("account", "0006_budget"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='transaction',
-            options={'ordering': ['-date', '-created_at']},
+            name="transaction",
+            options={"ordering": ["-date", "-created_at"]},
         ),
         migrations.AddField(
-            model_name='account',
-            name='is_active',
-            field=models.BooleanField(default=True, verbose_name='활성 여부'),
+            model_name="account",
+            name="is_active",
+            field=models.BooleanField(default=True, verbose_name="활성 여부"),
         ),
         migrations.AddField(
-            model_name='transaction',
-            name='is_repayment',
-            field=models.BooleanField(default=False, verbose_name='부채상환 거래'),
+            model_name="transaction",
+            name="is_repayment",
+            field=models.BooleanField(default=False, verbose_name="부채상환 거래"),
         ),
         migrations.AlterField(
-            model_name='account',
-            name='category',
-            field=models.CharField(choices=[('FIXED', '고정'), ('VARIABLE', '유동'), ('SAVING', '저축'), ('GENERAL', '일반')], default='GENERAL', max_length=10, verbose_name='계정 유형'),
+            model_name="account",
+            name="category",
+            field=models.CharField(
+                choices=[
+                    ("FIXED", "고정"),
+                    ("VARIABLE", "유동"),
+                    ("SAVING", "저축"),
+                    ("GENERAL", "일반"),
+                ],
+                default="GENERAL",
+                max_length=10,
+                verbose_name="계정 유형",
+            ),
         ),
         migrations.AlterField(
-            model_name='account',
-            name='type',
-            field=models.CharField(choices=[('자산', '자산'), ('부채', '부채'), ('순자산', '순자산'), ('수익', '수익'), ('비용', '비용')], max_length=10),
+            model_name="account",
+            name="type",
+            field=models.CharField(
+                choices=[
+                    ("자산", "자산"),
+                    ("부채", "부채"),
+                    ("순자산", "순자산"),
+                    ("수익", "수익"),
+                    ("비용", "비용"),
+                ],
+                max_length=10,
+            ),
         ),
     ]

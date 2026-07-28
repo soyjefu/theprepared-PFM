@@ -38,30 +38,52 @@
                 </button>
             </div>
             <div class="card-body px-4 pb-4">
-                <div class="collapse mb-4" id="addPresetForm">
+                <div class="collapse mb-4 {% if preset_form_has_errors or preset_form.errors %}show{% endif %}" id="addPresetForm">
                     <div class="p-4 bg-body-tertiary rounded border shadow-sm">
                         <h5 class="fw-bold mb-3 text-primary"><i class="fa-solid fa-plus-circle me-2"></i>새 프리셋 추가</h5>
+                        {% if preset_form.non_field_errors %}
+                            <div class="alert alert-danger small py-2 mb-3">
+                                {% for error in preset_form.non_field_errors %}
+                                    <div><i class="fa-solid fa-circle-exclamation me-1"></i>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
                         <form method="post" class="row g-3">
                             {% csrf_token %}
                             <div class="col-md-6">
                                 <label class="form-label small fw-bold text-secondary">프리셋 이름</label>
                                 {{ preset_form.name }}
+                                {% if preset_form.name.errors %}
+                                    <div class="text-danger small mt-1">{{ preset_form.name.errors.0 }}</div>
+                                {% endif %}
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label small fw-bold text-secondary">프리셋 타입</label>
                                 {{ preset_form.preset_type }}
+                                {% if preset_form.preset_type.errors %}
+                                    <div class="text-danger small mt-1">{{ preset_form.preset_type.errors.0 }}</div>
+                                {% endif %}
                             </div>
                             <div class="col-12">
                                 <label class="form-label small fw-bold text-secondary">아이템</label>
                                 {{ preset_form.item }}
+                                {% if preset_form.item.errors %}
+                                    <div class="text-danger small mt-1">{{ preset_form.item.errors.0 }}</div>
+                                {% endif %}
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label small fw-bold text-secondary">금액</label>
                                 {{ preset_form.amount }}
+                                {% if preset_form.amount.errors %}
+                                    <div class="text-danger small mt-1">{{ preset_form.amount.errors.0 }}</div>
+                                {% endif %}
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label small fw-bold text-secondary">고정 일자 (1-31)</label>
                                 {{ preset_form.day_of_month }}
+                                {% if preset_form.day_of_month.errors %}
+                                    <div class="text-danger small mt-1">{{ preset_form.day_of_month.errors.0 }}</div>
+                                {% endif %}
                             </div>
                             
                             <div class="col-md-6">
@@ -71,13 +93,16 @@
                                     {% for type, accounts in debit_accounts_grouped.items %}
                                         <optgroup label="{{ type }}">
                                             {% for acc in accounts %}
-                                                <option value="{{ acc.id }}">
+                                                <option value="{{ acc.id }}" {% if preset_form.debit_account.value|stringformat:"s" == acc.id|stringformat:"s" or request.POST.debit_account == acc.id|stringformat:"s" %}selected{% endif %}>
                                                     {% if acc.type == '자산' or acc.type == '비용' %}+{% else %}-{% endif %} {{ acc.name }}
                                                 </option>
                                             {% endfor %}
                                         </optgroup>
                                     {% endfor %}
                                 </select>
+                                {% if preset_form.debit_account.errors %}
+                                    <div class="text-danger small mt-1">{{ preset_form.debit_account.errors.0 }}</div>
+                                {% endif %}
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label small fw-bold text-danger">대변 계정 (-)</label>
@@ -86,13 +111,16 @@
                                     {% for type, accounts in credit_accounts_grouped.items %}
                                         <optgroup label="{{ type }}">
                                             {% for acc in accounts %}
-                                                <option value="{{ acc.id }}">
+                                                <option value="{{ acc.id }}" {% if preset_form.credit_account.value|stringformat:"s" == acc.id|stringformat:"s" or request.POST.credit_account == acc.id|stringformat:"s" %}selected{% endif %}>
                                                     {% if acc.type == '부채' or acc.type == '수익' or acc.type == '순자산' %}+{% else %}-{% endif %} {{ acc.name }}
                                                 </option>
                                             {% endfor %}
                                         </optgroup>
                                     {% endfor %}
                                 </select>
+                                {% if preset_form.credit_account.errors %}
+                                    <div class="text-danger small mt-1">{{ preset_form.credit_account.errors.0 }}</div>
+                                {% endif %}
                             </div>
 
                             <div class="col-12 text-end mt-4">

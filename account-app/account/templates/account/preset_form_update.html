@@ -10,28 +10,50 @@
                 <h4 class="fw-bold mb-0">거래 프리셋 수정</h4>
             </div>
             <div class="card-body p-4">
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger small py-2 mb-3">
+                        {% for error in form.non_field_errors %}
+                            <div><i class="fa-solid fa-circle-exclamation me-1"></i>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
                 <form method="post">
                     {% csrf_token %}
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label small fw-bold text-secondary">프리셋 이름</label>
                             {{ form.name }}
+                            {% if form.name.errors %}
+                                <div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small fw-bold text-secondary">프리셋 타입</label>
                             {{ form.preset_type }}
+                            {% if form.preset_type.errors %}
+                                <div class="text-danger small mt-1">{{ form.preset_type.errors.0 }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-12">
                             <label class="form-label small fw-bold text-secondary">아이템</label>
                             {{ form.item }}
+                            {% if form.item.errors %}
+                                <div class="text-danger small mt-1">{{ form.item.errors.0 }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small fw-bold text-secondary">금액</label>
                             {{ form.amount }}
+                            {% if form.amount.errors %}
+                                <div class="text-danger small mt-1">{{ form.amount.errors.0 }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small fw-bold text-secondary">고정 일자 (1-31)</label>
                             {{ form.day_of_month }}
+                            {% if form.day_of_month.errors %}
+                                <div class="text-danger small mt-1">{{ form.day_of_month.errors.0 }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small fw-bold text-primary">차변 계정 (+)</label>
@@ -47,6 +69,9 @@
                                     </optgroup>
                                 {% endfor %}
                             </select>
+                            {% if form.debit_account.errors %}
+                                <div class="text-danger small mt-1">{{ form.debit_account.errors.0 }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small fw-bold text-danger">대변 계정 (-)</label>
@@ -62,6 +87,9 @@
                                     </optgroup>
                                 {% endfor %}
                             </select>
+                            {% if form.credit_account.errors %}
+                                <div class="text-danger small mt-1">{{ form.credit_account.errors.0 }}</div>
+                            {% endif %}
                         </div>
                     </div>
                     
