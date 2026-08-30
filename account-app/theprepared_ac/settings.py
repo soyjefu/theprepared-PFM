@@ -26,8 +26,9 @@ SECRET_KEY = 'django-insecure-w!c5^)ts$jsp3%546gwi)a6kywnd=@sw3242ke-unfm)vk^nls
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['account.theprepared.kr', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['account.theprepared.kr', 'account_app', 'invest_app', 'invest-app', 'localhost', '127.0.0.1', '*']
 CSRF_TRUSTED_ORIGINS = ['https://account.theprepared.kr']
+INTERNAL_SYNC_TOKEN = 'theprepared_inter_app_secret_sync_2026'
 # Application definition
 
 INSTALLED_APPS = [

@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import views_internal
 
 app_name = "account"
 
@@ -45,4 +46,6 @@ urlpatterns = [
     ),
     # 예산 및 통계계 관련
     path("reports/", views.reports_view, name="reports"),
+    # [v128.9] Invest 퀀트 실시간 평가액 연동 내부 API
+    path("api/internal/reconcile-valuation/", views_internal.reconcile_valuation_api, name="internal_reconcile_valuation"),
 ]
