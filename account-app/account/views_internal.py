@@ -80,11 +80,14 @@ def reconcile_valuation_api(request):
             continue
 
         if diff > 0:
-            income_acc = Account.objects.filter(owner=acc.owner, type='수익', name__icontains='수익').first()
+            income_acc = (
+                Account.objects.filter(owner=acc.owner, type='수익', name__in=['펀드,주식', '주식,펀드', '주식 수익', '펀드/주식']).first()
+                or Account.objects.filter(owner=acc.owner, type='수익', name__icontains='주식').first()
+                or Account.objects.filter(owner=acc.owner, type='수익', name__icontains='펀드').first()
+                or Account.objects.filter(owner=acc.owner, type='수익').first()
+            )
             if not income_acc:
-                income_acc = Account.objects.filter(owner=acc.owner, type='수익').first()
-            if not income_acc:
-                income_acc = Account.objects.create(owner=acc.owner, name='주식 수익', type='수익', category='VARIABLE')
+                income_acc = Account.objects.create(owner=acc.owner, name='펀드,주식', type='수익', category='VARIABLE')
             
             t = Transaction.objects.create(
                 owner=acc.owner,
